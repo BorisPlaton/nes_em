@@ -1,5 +1,6 @@
 mod codes;
-pub mod cpu;
+mod cpu;
 mod error;
-mod flags;
-pub mod opcode;
+mod opcode;
+mod register;
+mod stack;

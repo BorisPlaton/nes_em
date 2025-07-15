@@ -1,14 +1,26 @@
-pub struct Flags {
-    state: u8,
+use crate::cpu::register::register::Register;
+
+pub struct Status {
+    state: Register<u8>,
 }
 
-impl Flags {
+impl Status {
     pub fn new() -> Self {
-        Flags { state: 0b0001_0000 }
+        Status {
+            state: Register::<u8>::new(0b0001_0000),
+        }
+    }
+
+    pub fn set(&mut self, value: u8) {
+        self.state.set(value);
+    }
+
+    pub fn get(&self) -> u8 {
+        self.state.get()
     }
 
     pub fn reset(&mut self) {
-        self.state = 0b0001_0000;
+        self.state.set(0b0001_0000);
     }
 
     pub fn change_carry_flag(&mut self, activate: bool) {
@@ -40,10 +52,11 @@ impl Flags {
     }
 
     fn change_flag(&mut self, flag: u8, activate: bool) {
-        if activate {
-            self.state |= flag
+        let new_state = if activate {
+            self.state.get() | flag
         } else {
-            self.state &= !flag
+            self.state.get() & !flag
         };
+        self.state.set(new_state);
     }
 }
