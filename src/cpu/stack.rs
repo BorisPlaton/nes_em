@@ -39,7 +39,6 @@ impl Stack {
         if self.stack_pointer.get() == 0x01FF {
             return Err(StackError::Underflow);
         }
-        self.stack_pointer.inc();
-        Ok(memory_map.read(self.stack_pointer.get()))
+        Ok(memory_map.read(self.stack_pointer.inc()))
     }
 }
