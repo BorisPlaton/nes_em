@@ -27,7 +27,7 @@ impl Stack {
 
     pub fn push(&mut self, value: u8, memory_map: &mut MemoryMap) -> Result<(), StackError> {
         let address = self.stack_pointer.get();
-        if address > 0x0100 {
+        if address < 0x0100 {
             return Err(StackError::Overflow);
         }
         self.stack_pointer.dec();

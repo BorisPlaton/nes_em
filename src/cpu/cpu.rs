@@ -1,10 +1,10 @@
-use crate::cpu::codes::OPCODES;
+use crate::cpu::opcode::OPCODES;
 use crate::cpu::error::{StackError, UnknownOpCode};
 use crate::cpu::opcode::{AddressingMode, Instruction, OpCode};
 use crate::cpu::register::counter::ProgramCounter;
 use crate::cpu::register::register::Register;
 use crate::cpu::register::status::Status;
-use crate::cpu::stack::Stack;
+use crate::cpu::register::stack::Stack;
 use crate::mem::map::{IOOperation, MemoryMap};
 use std::error::Error;
 
@@ -605,8 +605,8 @@ impl CPU {
                 ])
             }
             AddressingMode::IndirectIndexedY => {
-                let indirect_address = self.memory.read(self.program_counter.get());
-                let real_address: u16 = self.memory.read(indirect_address);
+                let indirect_address: u8 = self.memory.read(self.program_counter.get());
+                let real_address: u16 = self.memory.read(indirect_address as u16);
                 real_address.wrapping_add(self.register_y.get() as u16)
             }
             AddressingMode::ZeroPage => {
