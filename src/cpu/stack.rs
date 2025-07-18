@@ -39,6 +39,9 @@ impl Stack {
         if self.stack_pointer.get() == 0x01FF {
             return Err(StackError::Underflow);
         }
-        Ok(memory_map.read(self.stack_pointer.inc()))
+        let value_address = self.stack_pointer.inc();
+        let value = Ok(memory_map.read(value_address));
+        memory_map.write(value_address, 0u8);
+        value
     }
 }

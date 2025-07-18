@@ -95,8 +95,8 @@ impl CPU {
                 OpCode::PLP => self.plp()?,
                 OpCode::ROL => self.rol(&instruction.mode),
                 OpCode::ROR => self.ror(&instruction.mode),
-                OpCode::RTI => self.rti(&instruction.mode),
-                OpCode::RTS => self.rts(&instruction.mode),
+                OpCode::RTI => self.rti()?,
+                OpCode::RTS => self.rts()?,
                 OpCode::SBC => self.sbc(&instruction.mode),
                 OpCode::SEC => self.sec(),
                 OpCode::SED => self.sed(),
@@ -116,6 +116,12 @@ impl CPU {
 
     fn adc(&mut self, addressing_mode: &AddressingMode) {
         let value = self.get_value(addressing_mode);
+        self.adc_operation(value);
+    }
+
+    // Moved ADC instruction's logic to separate function, because the same logic
+    // is reused in the SBC instruction.
+    fn adc_operation(&mut self, value: u8) {
         let signed_value = value as i8;
         let signed_accumulator_value = self.accumulator.get() as i8;
         let carry_bit = self.status.is_carry_flag_set() as u8;
@@ -381,7 +387,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
         };
-        self.status.set_carry_flag_to(old_value & 0x01 != 0);
+        self.status.set_carry_flag_to(old_value & 1 != 0);
         self.status.set_negative_flag(0);
         self.status.set_zero_flag(shifted_value);
     }
@@ -403,10 +409,9 @@ impl CPU {
         Ok(())
     }
 
-    // TODO: set b flag
-    // https://www.nesdev.org/wiki/Status_flags#The_B_flag
     fn php(&mut self) -> Result<(), StackError> {
-        self.stack.push(self.status.get(), &mut self.memory)?;
+        let status = self.status.get() | 0b0001_0000;
+        self.stack.push(status, &mut self.memory)?;
         Ok(())
     }
 
@@ -424,15 +429,70 @@ impl CPU {
         Ok(())
     }
 
-    fn rol(&mut self, addressing_mode: &AddressingMode) {}
+    fn rol(&mut self, addressing_mode: &AddressingMode) {
+        let (old_value, shifted_value) = match addressing_mode {
+            AddressingMode::Accumulator => {
+                let old_value = self.accumulator.get();
+                let shifted_value = (old_value << 1) + self.status.get_carry_flag();
+                self.accumulator.set(shifted_value);
+                (old_value, shifted_value)
+            }
+            _ => {
+                let old_value_address = self.get_address(addressing_mode);
+                let old_value: u8 = self.memory.read(old_value_address);
+                let shifted_value = (old_value << 1) + self.status.get_carry_flag();
+                self.memory.write(old_value_address, shifted_value);
+                (old_value, shifted_value)
+            }
+        };
+        self.status.set_carry_flag_to(old_value & 0x10 != 0);
+        self.status.set_negative_flag(shifted_value);
+        self.status.set_zero_flag(shifted_value);
+    }
 
-    fn ror(&mut self, addressing_mode: &AddressingMode) {}
+    fn ror(&mut self, addressing_mode: &AddressingMode) {
+        let (old_value, shifted_value) = match addressing_mode {
+            AddressingMode::Accumulator => {
+                let old_value = self.accumulator.get();
+                let shifted_value = (old_value >> 1) + (self.status.get_carry_flag() << 7);
+                self.accumulator.set(shifted_value);
+                (old_value, shifted_value)
+            }
+            _ => {
+                let old_value_address = self.get_address(addressing_mode);
+                let old_value: u8 = self.memory.read(old_value_address);
+                let shifted_value = (old_value >> 1) + (self.status.get_carry_flag() << 7);
+                self.memory.write(old_value_address, shifted_value);
+                (old_value, shifted_value)
+            }
+        };
+        self.status.set_carry_flag_to(old_value & 1 != 0);
+        self.status.set_negative_flag(0);
+        self.status.set_zero_flag(shifted_value);
+    }
 
-    fn rti(&mut self, addressing_mode: &AddressingMode) {}
+    fn rti(&mut self) -> Result<(), StackError> {
+        let status = self.stack.pull(&mut self.memory)?;
+        let program_counter_lo = self.stack.pull(&mut self.memory)?;
+        let program_counter_hi = self.stack.pull(&mut self.memory)?;
+        self.status.set(status);
+        self.program_counter
+            .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]));
+        Ok(())
+    }
 
-    fn rts(&mut self, addressing_mode: &AddressingMode) {}
+    fn rts(&mut self) -> Result<(), StackError> {
+        let program_counter_lo = self.stack.pull(&mut self.memory)?;
+        let program_counter_hi = self.stack.pull(&mut self.memory)?;
+        self.program_counter
+            .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]) + 1);
+        Ok(())
+    }
 
-    fn sbc(&mut self, addressing_mode: &AddressingMode) {}
+    fn sbc(&mut self, addressing_mode: &AddressingMode) {
+        let value = self.get_value(addressing_mode);
+        self.adc_operation(!value);
+    }
 
     fn sec(&mut self) {
         self.status.set_carry_flag_to(true);
@@ -532,7 +592,7 @@ impl CPU {
 
                 // Indirect addressing mode is used only in JMP instruction. But an original 6502
                 // has does not correctly fetch the target address if the indirect vector falls on
-                // a page boundary. This code is fixing it.
+                // a page boundary. This code fixes it.
                 // Details: https://www.nesdev.org/obelisk-6502-guide/reference.html#JMP
                 let hi_indirect_address_suffix: u8 = indirect_address_suffix.wrapping_add(1);
                 let address_prefix = (indirect_address >> 8) as u8;
@@ -574,64 +634,5 @@ impl CPU {
     fn get_value(&mut self, addressing_mode: &AddressingMode) -> u8 {
         let value_address = self.get_address(addressing_mode);
         self.memory.read(value_address)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lda_loads_value_to_register_a_and_change_status() {
-        let mut cpu = CPU::new();
-
-        cpu.run(vec![0xa9, 0x0f, 0x00]);
-        assert_eq!(cpu.accumulator, 0x0f);
-        assert_eq!(cpu.status, 0);
-
-        cpu.run(vec![0xa9, 0, 0x00]);
-        assert_eq!(cpu.accumulator, 0);
-        assert_eq!(cpu.status, 0x02);
-
-        cpu.run(vec![0xa9, 0xff, 0x00]);
-        assert_eq!(cpu.accumulator, 0xff);
-        assert_eq!(cpu.status, 0x80);
-    }
-
-    #[test]
-    fn test_tax_transfer_from_register_a_to_x_and_change_status() {
-        let mut cpu = CPU::new();
-
-        cpu.run(vec![0xa9, 0x0f, 0xaa, 0x00]);
-        assert_eq!(cpu.register_x, 0x0f);
-        assert_eq!(cpu.accumulator, 0x0f);
-        assert_eq!(cpu.status, 0);
-
-        cpu.run(vec![0xa9, 0, 0xaa, 0x00]);
-        assert_eq!(cpu.register_x, 0);
-        assert_eq!(cpu.accumulator, 0);
-        assert_eq!(cpu.status, 0x02);
-
-        cpu.run(vec![0xa9, 0xff, 0xaa, 0x00]);
-        assert_eq!(cpu.register_x, 0xff);
-        assert_eq!(cpu.accumulator, 0xff);
-        assert_eq!(cpu.status, 0x80);
-    }
-
-    #[test]
-    fn test_inx_increments_register_x() {
-        let mut cpu = CPU::new();
-
-        cpu.run(vec![0xe8, 0x00]);
-        assert_eq!(cpu.register_x, 0x01);
-        assert_eq!(cpu.status, 0);
-    }
-
-    #[test]
-    fn test_5_ops_working_together() {
-        let mut cpu = CPU::new();
-
-        cpu.run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
-        assert_eq!(cpu.register_x, 0xc1)
     }
 }

@@ -12,15 +12,19 @@ impl Status {
     }
 
     pub fn set(&mut self, value: u8) {
-        self.state.set(value);
+        self.state.set(value & 0b1110_1111);
     }
 
     pub fn get(&self) -> u8 {
         self.state.get()
     }
 
+    pub fn get_carry_flag(&self) -> u8 {
+        self.state.get() & 1
+    }
+
     pub fn reset(&mut self) {
-        self.state.set(0b0001_0000);
+        self.state.set(0b0010_0000);
     }
 
     pub fn is_carry_flag_set(&self) -> bool {
@@ -49,10 +53,6 @@ impl Status {
 
     pub fn set_decimal_mode_flag_to(&mut self, activate: bool) {
         self.change_flag(0b0000_1000, activate);
-    }
-
-    pub fn set_break_command_flag_to(&mut self, activate: bool) {
-        self.change_flag(0b0001_0000, activate);
     }
 
     pub fn set_overflow_flag_to(&mut self, activate: bool) {
