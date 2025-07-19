@@ -24,7 +24,8 @@ impl ProgramCounter {
     }
 
     pub fn add(&mut self, value: u16) {
-        self.register.add(value);
+        let value = self.register.add(value);
+        self.register.set(value);
     }
 
     pub fn move_with_offset(&mut self, value: u8) {

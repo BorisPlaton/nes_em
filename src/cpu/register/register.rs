@@ -35,9 +35,7 @@ impl Register<u8> {
     }
 
     pub fn add(&mut self, value: u8) -> (u8, bool) {
-        let addition_result = self.value.overflowing_add(value);
-        self.value = addition_result.0;
-        addition_result
+        self.value.overflowing_add(value)
     }
 
     pub fn sub(&mut self, value: u8, store: bool) -> u8 {
@@ -60,8 +58,7 @@ impl Register<u16> {
     }
 
     pub fn add(&mut self, value: u16) -> u16 {
-        self.value = self.value.wrapping_add(value);
-        self.value
+        self.value.wrapping_add(value)
     }
 
     pub fn add_signed(&mut self, value: i16) {

@@ -1,10 +1,10 @@
-use crate::cpu::opcode::OPCODES;
 use crate::cpu::error::{StackError, UnknownOpCode};
+use crate::cpu::opcode::OPCODES;
 use crate::cpu::opcode::{AddressingMode, Instruction, OpCode};
 use crate::cpu::register::counter::ProgramCounter;
 use crate::cpu::register::register::Register;
-use crate::cpu::register::status::Status;
 use crate::cpu::register::stack::Stack;
+use crate::cpu::register::status::Status;
 use crate::mem::map::{IOOperation, MemoryMap};
 use std::error::Error;
 
@@ -122,30 +122,15 @@ impl CPU {
     // Moved ADC instruction's logic to separate function, because the same logic
     // is reused in the SBC instruction.
     fn adc_operation(&mut self, value: u8) {
-        let signed_value = value as i8;
-        let signed_accumulator_value = self.accumulator.get() as i8;
-        let carry_bit = self.status.is_carry_flag_set() as u8;
-        let (result, is_carry_flag_set) = self.accumulator.add(value + carry_bit);
-        let signed_result = signed_value
-            .wrapping_add(signed_accumulator_value)
-            .wrapping_add(carry_bit as i8);
-        #[rustfmt::skip]
-        let is_overflow_flag_set = (
-            signed_value >= 0 &&
-            signed_accumulator_value >= 0
-            && carry_bit == 1
-            && signed_result < 0
-        ) || (
-            signed_value < 0 &&
-            signed_accumulator_value < 0 &&
-            carry_bit == 0 &&
-            signed_result > 0
-        );
-
+        let (result, is_carry_flag_set) = self
+            .accumulator
+            .add(value + self.status.is_carry_flag_set() as u8);
         self.status.set_carry_flag_to(is_carry_flag_set);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
-        self.status.set_overflow_flag_to(is_overflow_flag_set);
+        self.status
+            .set_overflow_flag_to((value ^ result) & (result ^ self.accumulator.get()) & 0x80 != 0);
+        self.accumulator.set(result);
     }
 
     fn and(&mut self, addressing_mode: &AddressingMode) {
@@ -172,7 +157,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
         };
-        self.status.set_carry_flag_to(old_value & 0x10 != 0);
+        self.status.set_carry_flag_to(old_value & 0b1000_0000 != 0);
         self.status.set_negative_flag(shifted_value);
         self.status.set_zero_flag(shifted_value);
     }
@@ -445,7 +430,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
         };
-        self.status.set_carry_flag_to(old_value & 0x10 != 0);
+        self.status.set_carry_flag_to(old_value & 0b1000_0000 != 0);
         self.status.set_negative_flag(shifted_value);
         self.status.set_zero_flag(shifted_value);
     }
@@ -467,7 +452,7 @@ impl CPU {
             }
         };
         self.status.set_carry_flag_to(old_value & 1 != 0);
-        self.status.set_negative_flag(0);
+        self.status.set_negative_flag(shifted_value);
         self.status.set_zero_flag(shifted_value);
     }
 
@@ -485,7 +470,7 @@ impl CPU {
         let program_counter_lo = self.stack.pull(&mut self.memory)?;
         let program_counter_hi = self.stack.pull(&mut self.memory)?;
         self.program_counter
-            .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]) + 1);
+            .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]).wrapping_add(1));
         Ok(())
     }
 
@@ -594,13 +579,11 @@ impl CPU {
                 // has does not correctly fetch the target address if the indirect vector falls on
                 // a page boundary. This code fixes it.
                 // Details: https://www.nesdev.org/obelisk-6502-guide/reference.html#JMP
-                let hi_indirect_address_suffix: u8 = indirect_address_suffix.wrapping_add(1);
-                let address_prefix = (indirect_address >> 8) as u8;
                 u16::from_le_bytes([
                     self.memory.read(indirect_address),
                     self.memory.read(u16::from_be_bytes([
-                        address_prefix,
-                        hi_indirect_address_suffix,
+                        (indirect_address >> 8) as u8,
+                        indirect_address_suffix.wrapping_add(1),
                     ])),
                 ])
             }
@@ -634,5 +617,593 @@ impl CPU {
     fn get_value(&mut self, addressing_mode: &AddressingMode) -> u8 {
         let value_address = self.get_address(addressing_mode);
         self.memory.read(value_address)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_cpu_with_program(program: Vec<u8>) -> CPU {
+        let mut cpu = CPU::new();
+        cpu.load_program(program);
+        cpu.reset();
+        cpu
+    }
+
+    #[test]
+    fn test_adc_immediate() {
+        let mut cpu = setup_cpu_with_program(vec![0x69, 0x01, 0x00]);
+        cpu.accumulator.set(0x01);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x02);
+        assert!(!cpu.status.is_carry_flag_set());
+        assert!(!cpu.status.is_zero_flag_set());
+        assert!(!cpu.status.is_overflow_flag_set());
+    }
+
+    #[test]
+    fn test_asl_accumulator() {
+        let mut cpu = setup_cpu_with_program(vec![0x0A, 0x00]);
+        cpu.accumulator.set(0b0100_0001);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0b1000_0010);
+        assert!(!cpu.status.is_carry_flag_set());
+    }
+
+    #[test]
+    fn test_bcc_no_carry() {
+        let mut cpu = setup_cpu_with_program(vec![0x90, 0x02, 0x00, 0xA9, 0x01, 0x00]);
+        cpu.status.set_carry_flag_to(false);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x00);
+    }
+
+    #[test]
+    fn test_lda_immediate() {
+        let mut cpu = setup_cpu_with_program(vec![0xA9, 0x42, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x42);
+        assert!(!cpu.status.is_zero_flag_set());
+        assert!(!cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_lda_immediate_zero() {
+        let mut cpu = setup_cpu_with_program(vec![0xA9, 0x00, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x00);
+        assert!(cpu.status.is_zero_flag_set());
+        assert!(!cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_lda_immediate_negative() {
+        let mut cpu = setup_cpu_with_program(vec![0xA9, 0xFF, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0xFF);
+        assert!(!cpu.status.is_zero_flag_set());
+        assert!(cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_ldy_immediate() {
+        let mut cpu = setup_cpu_with_program(vec![0xA0, 0x42, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_y.get(), 0x42);
+    }
+
+    #[test]
+    fn test_tax() {
+        let mut cpu = setup_cpu_with_program(vec![0xA9, 0x42, 0xAA, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_x.get(), 0x42);
+    }
+
+    #[test]
+    fn test_tay() {
+        let mut cpu = setup_cpu_with_program(vec![0xA9, 0x42, 0xA8, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_y.get(), 0x42);
+    }
+
+    #[test]
+    fn test_txa() {
+        let mut cpu = setup_cpu_with_program(vec![0xA2, 0x42, 0x8A, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x42);
+    }
+
+    #[test]
+    fn test_tya() {
+        let mut cpu = setup_cpu_with_program(vec![0xA0, 0x42, 0x98, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x42);
+    }
+
+    #[test]
+    fn test_inc_zero_page() {
+        let mut cpu = setup_cpu_with_program(vec![0xE6, 0x42, 0x00]);
+        cpu.memory.write(0x42, 0x01u8);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x42);
+        assert_eq!(value, 0x02);
+        assert!(!cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_dec_zero_page() {
+        let mut cpu = setup_cpu_with_program(vec![0xC6, 0x42, 0x00]);
+        cpu.memory.write(0x42, 0x01u8);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x42u16);
+        assert_eq!(value, 0x00);
+        assert!(cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_inx() {
+        let mut cpu = setup_cpu_with_program(vec![0xE8, 0x00]);
+        cpu.register_x.set(0x01);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_x.get(), 0x02);
+        assert!(!cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_dex() {
+        let mut cpu = setup_cpu_with_program(vec![0xCA, 0x00]);
+        cpu.register_x.set(0x01);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_x.get(), 0x00);
+        assert!(cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_iny() {
+        let mut cpu = setup_cpu_with_program(vec![0xC8, 0x00]);
+        cpu.register_y.set(0x01);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_y.get(), 0x02);
+        assert!(!cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_dey() {
+        let mut cpu = setup_cpu_with_program(vec![0x88, 0x00]);
+        cpu.register_y.set(0x01);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_y.get(), 0x00);
+        assert!(cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_jmp_absolute() {
+        let mut cpu = setup_cpu_with_program(vec![0x4C, 0x34, 0x12, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.program_counter.get(), 0x1235);
+    }
+
+    #[test]
+    fn test_jsr_rts() {
+        let mut cpu = setup_cpu_with_program(vec![
+            0x20, 0x04, 0x80, // JSR $8004
+            0x00, // BRK (shouldn't reach here)
+            0xA9, 0x42, // LDA #$42
+            0x60, // RTS
+            0x00, // BRK
+        ]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x42);
+    }
+
+    #[test]
+    fn test_pha_pla() {
+        let mut cpu = setup_cpu_with_program(vec![0xA9, 0x42, 0x48, 0xA9, 0x00, 0x68, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x42);
+    }
+
+    #[test]
+    fn test_php_plp() {
+        let mut cpu = setup_cpu_with_program(vec![0x08, 0xA9, 0xFF, 0x28, 0x00]);
+        cpu.status.set(0b1100_0000);
+
+        cpu.interpret().unwrap();
+
+        assert!(cpu.status.is_negative_flag_set());
+        assert!(cpu.status.is_overflow_flag_set());
+    }
+
+    #[test]
+    fn test_sec_clc() {
+        let mut cpu = setup_cpu_with_program(vec![0x38, 0x18, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert!(!cpu.status.is_carry_flag_set());
+    }
+
+    #[test]
+    fn test_sed_cld() {
+        let mut cpu = setup_cpu_with_program(vec![0xF8, 0xD8, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.status.get() & 0b0000_1000, 0);
+    }
+
+    #[test]
+    fn test_clv() {
+        let mut cpu = setup_cpu_with_program(vec![0xB8, 0x00]);
+        cpu.status.set_overflow_flag_to(true);
+
+        cpu.interpret().unwrap();
+
+        assert!(!cpu.status.is_overflow_flag_set());
+    }
+
+    #[test]
+    fn test_bit_zero_page() {
+        let mut cpu = setup_cpu_with_program(vec![0x24, 0x42, 0x00]);
+        cpu.memory.write(0x42, 0b1100_0000u8);
+        cpu.accumulator.set(0b0011_1111);
+
+        cpu.interpret().unwrap();
+
+        assert!(cpu.status.is_negative_flag_set());
+        assert!(cpu.status.is_overflow_flag_set());
+        assert!(cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_lda_zero_page() {
+        let mut cpu = setup_cpu_with_program(vec![0xA5, 0x42, 0x00]);
+        cpu.memory.write(0x42, 0xABu8);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0xAB);
+        assert!(!cpu.status.is_zero_flag_set());
+        assert!(cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_sta_absolute() {
+        let mut cpu = setup_cpu_with_program(vec![0x8D, 0x34, 0x12, 0x00]);
+        cpu.accumulator.set(0x42);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x1234);
+        assert_eq!(value, 0x42);
+    }
+
+    #[test]
+    fn test_ldx_immediate() {
+        let mut cpu = setup_cpu_with_program(vec![0xA2, 0x7F, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_x.get(), 0x7F);
+        assert!(!cpu.status.is_zero_flag_set());
+        assert!(!cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_sty_zero_page_x() {
+        let mut cpu = setup_cpu_with_program(vec![0x94, 0x20, 0x00]);
+        cpu.register_x.set(0x02);
+        cpu.register_y.set(0xAB);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x22);
+        assert_eq!(value, 0xAB);
+    }
+
+    #[test]
+    fn test_adc_with_carry() {
+        let mut cpu = setup_cpu_with_program(vec![0x69, 0x01, 0x00]);
+        cpu.accumulator.set(0xFF);
+        cpu.status.set_carry_flag_to(true);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x01);
+        assert!(cpu.status.is_carry_flag_set());
+        assert!(!cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_sbc_with_borrow() {
+        let mut cpu = setup_cpu_with_program(vec![0xE9, 0x01, 0x00]);
+        cpu.accumulator.set(0x02);
+        cpu.status.set_carry_flag_to(false);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x00);
+        assert!(cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_inc_absolute() {
+        let mut cpu = setup_cpu_with_program(vec![0xEE, 0x34, 0x12, 0x00]);
+        cpu.memory.write(0x1234, 0x7Fu8);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x1234);
+        assert_eq!(value, 0x80);
+        assert!(cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_and_immediate() {
+        let mut cpu = setup_cpu_with_program(vec![0x29, 0b1010_1010, 0x00]);
+        cpu.accumulator.set(0b1111_0000);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0b1010_0000);
+        assert!(!cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_ora_indirect_y() {
+        let mut cpu = setup_cpu_with_program(vec![0x11, 0x20, 0x00]);
+        cpu.register_y.set(0x01);
+        cpu.memory.write(0x20, 0x34u8);
+        cpu.memory.write(0x21, 0x12u8);
+        cpu.memory.write(0x1235, 0x0Fu8);
+        cpu.accumulator.set(0xF0);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0xFF);
+    }
+
+    #[test]
+    fn test_eor_zero_page_x() {
+        let mut cpu = setup_cpu_with_program(vec![0x55, 0x20, 0x00]);
+        cpu.register_x.set(0x02);
+        cpu.memory.write(0x22, 0b1010_1010u8);
+        cpu.accumulator.set(0b1111_0000);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0b0101_1010);
+    }
+
+    #[test]
+    fn test_lsr_accumulator() {
+        let mut cpu = setup_cpu_with_program(vec![0x4A, 0x00]);
+        cpu.accumulator.set(0b0000_0001);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0b0000_0000);
+        assert!(cpu.status.is_carry_flag_set());
+        assert!(cpu.status.is_zero_flag_set());
+    }
+
+    #[test]
+    fn test_rol_zero_page() {
+        let mut cpu = setup_cpu_with_program(vec![0x26, 0x42, 0x00]);
+        cpu.memory.write(0x42, 0b1100_0000u8);
+        cpu.status.set_carry_flag_to(true);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x42);
+        assert_eq!(value, 0b1000_0001);
+        assert!(cpu.status.is_carry_flag_set());
+        assert!(cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_bne_taken() {
+        let mut cpu = setup_cpu_with_program(vec![0xD0, 0x02, 0xA9, 0x01, 0xA9, 0x02, 0x00]);
+        cpu.status.set_zero_flag(0);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x02);
+    }
+
+    #[test]
+    fn test_beq_not_taken() {
+        let mut cpu = setup_cpu_with_program(vec![0xF0, 0x02, 0xA9, 0x01, 0xA9, 0x02, 0x00]);
+        cpu.status.set_zero_flag(0);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x02);
+    }
+
+    #[test]
+    fn test_pha_php_pla_plp() {
+        let mut cpu = setup_cpu_with_program(vec![
+            0xA9, 0x42, // LDA #$42
+            0x48, // PHA
+            0xA9, 0x00, // LDA #$00
+            0x08, // PHP
+            0x28, // PLP
+            0x68, // PLA
+            0x00, // BRK
+        ]);
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x42);
+        assert!(!cpu.status.is_negative_flag_set());
+        assert!(!cpu.status.is_overflow_flag_set());
+    }
+
+    #[test]
+    fn test_clc_sec() {
+        let mut cpu = setup_cpu_with_program(vec![0x38, 0x18, 0x00]);
+
+        cpu.interpret().unwrap();
+
+        assert!(!cpu.status.is_carry_flag_set());
+    }
+
+    #[test]
+    fn test_adc_decimal_mode() {
+        let mut cpu = setup_cpu_with_program(vec![0x69, 0x19, 0x00]);
+        cpu.accumulator.set(0x23);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x3C);
+        assert!(!cpu.status.is_carry_flag_set());
+    }
+
+    #[test]
+    fn test_sbc_overflow() {
+        let mut cpu = setup_cpu_with_program(vec![0xE9, 0x7F, 0x00]);
+        cpu.accumulator.set(0x80);
+        cpu.status.set_carry_flag_to(true);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x01);
+        assert!(cpu.status.is_carry_flag_set());
+        assert!(cpu.status.is_overflow_flag_set());
+    }
+
+    #[test]
+    fn test_bit_absolute() {
+        let mut cpu = setup_cpu_with_program(vec![0x2C, 0x34, 0x12, 0x00]);
+        cpu.memory.write(0x1234, 0b0100_0000u8);
+        cpu.accumulator.set(0b0000_0000);
+
+        cpu.interpret().unwrap();
+
+        assert!(cpu.status.is_zero_flag_set());
+        assert!(cpu.status.is_overflow_flag_set());
+        assert!(!cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_asl_zero_page_x() {
+        let mut cpu = setup_cpu_with_program(vec![0x16, 0x20, 0x00]);
+        cpu.register_x.set(0x02);
+        cpu.memory.write(0x22, 0b0100_0001u8);
+
+        cpu.interpret().unwrap();
+
+        let value: u8 = cpu.memory.read(0x22);
+        assert_eq!(value, 0b1000_0010);
+        assert!(!cpu.status.is_carry_flag_set());
+    }
+
+    #[test]
+    fn test_ror_accumulator_with_carry() {
+        let mut cpu = setup_cpu_with_program(vec![0x6A, 0x00]);
+        cpu.accumulator.set(0b0000_0001);
+        cpu.status.set_carry_flag_to(true);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0b1000_0000);
+        assert!(cpu.status.is_carry_flag_set());
+        assert!(cpu.status.is_negative_flag_set());
+    }
+
+    #[test]
+    fn test_bvc_no_overflow() {
+        let mut cpu = setup_cpu_with_program(vec![0x50, 0x02, 0xA9, 0x01, 0xA9, 0x02, 0x00]);
+        cpu.status.set_overflow_flag_to(false);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x02);
+    }
+
+    #[test]
+    fn test_bvs_overflow() {
+        let mut cpu = setup_cpu_with_program(vec![0x70, 0x02, 0xA9, 0x01, 0xA9, 0x02, 0x00]);
+        cpu.status.set_overflow_flag_to(true);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.accumulator.get(), 0x02);
+    }
+
+    #[test]
+    fn test_tsx_txs() {
+        let mut cpu = setup_cpu_with_program(vec![0xBA, 0x9A, 0x00]);
+        cpu.stack.set_pointer(0xAB).unwrap();
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.register_x.get(), 0xAB);
+        assert_eq!(cpu.stack.get_pointer(), 0xAB);
+    }
+
+    #[test]
+    fn test_rts_returns_correctly() {
+        let mut cpu = setup_cpu_with_program(vec![
+            0x20, 0x04, 0x80, // JSR $8004
+            0x00, // BRK
+            0x60, // RTS
+        ]);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.program_counter.get(), 0x8004);
+    }
+
+    #[test]
+    fn test_jmp_indirect_page_boundary() {
+        let mut cpu = setup_cpu_with_program(vec![0x6C, 0xFF, 0x00, 0x00]);
+        cpu.memory.write(0x00FF, 0x34u8);
+        cpu.memory.write(0x0000, 0x12u8);
+
+        cpu.interpret().unwrap();
+
+        assert_eq!(cpu.program_counter.get(), 0x1235);
     }
 }

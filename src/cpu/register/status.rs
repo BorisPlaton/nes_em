@@ -60,7 +60,7 @@ impl Status {
     }
 
     pub fn set_negative_flag(&mut self, value: u8) {
-        self.change_flag(0b1000_0000, value & 0x10 != 0);
+        self.change_flag(0b1000_0000, value & 0b1000_0000 != 0);
     }
 
     pub fn set_zero_flag(&mut self, value: u8) {
