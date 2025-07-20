@@ -1,6 +1,6 @@
+use crate::bus::{Bus, IOOperation};
 use crate::cpu::error::StackError;
 use crate::cpu::register::register::Register;
-use crate::mem::map::{IOOperation, MemoryMap};
 
 pub struct Stack {
     stack_pointer: Register<u16>,
@@ -25,23 +25,23 @@ impl Stack {
         Ok(())
     }
 
-    pub fn push(&mut self, value: u8, memory_map: &mut MemoryMap) -> Result<(), StackError> {
+    pub fn push(&mut self, value: u8, bus: &mut Bus) -> Result<(), StackError> {
         let address = self.stack_pointer.get();
         if address < 0x0100 {
             return Err(StackError::Overflow);
         }
         self.stack_pointer.dec();
-        memory_map.write(address, value);
+        bus.write(address, value);
         Ok(())
     }
 
-    pub fn pull(&mut self, memory_map: &mut MemoryMap) -> Result<u8, StackError> {
+    pub fn pull(&mut self, bus: &mut Bus) -> Result<u8, StackError> {
         if self.stack_pointer.get() == 0x01FF {
             return Err(StackError::Underflow);
         }
         let value_address = self.stack_pointer.inc();
-        let value = Ok(memory_map.read(value_address));
-        memory_map.write(value_address, 0u8);
+        let value = Ok(bus.read(value_address));
+        bus.write(value_address, 0u8);
         value
     }
 }
