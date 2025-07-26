@@ -1,5 +1,7 @@
 use crate::cpu::register::register::Register;
 
+const STATUS_INITIAL_STATE: u8 = 0b0010_0100;
+
 pub struct Status {
     state: Register<u8>,
 }
@@ -7,12 +9,12 @@ pub struct Status {
 impl Status {
     pub fn new() -> Self {
         Status {
-            state: Register::<u8>::new(0b0010_0000),
+            state: Register::<u8>::new(STATUS_INITIAL_STATE),
         }
     }
 
     pub fn set(&mut self, value: u8) {
-        self.state.set(value & 0b1110_1111);
+        self.state.set(value | 0b0010_0000);
     }
 
     pub fn get(&self) -> u8 {
@@ -24,7 +26,7 @@ impl Status {
     }
 
     pub fn reset(&mut self) {
-        self.state.set(0b0010_0000);
+        self.state.set(STATUS_INITIAL_STATE);
     }
 
     pub fn is_carry_flag_set(&self) -> bool {

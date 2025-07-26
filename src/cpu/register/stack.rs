@@ -9,7 +9,7 @@ pub struct Stack {
 impl Stack {
     pub fn new() -> Stack {
         Stack {
-            stack_pointer: Register::new(0x01FF),
+            stack_pointer: Register::new(0x01FD),
         }
     }
 
@@ -39,9 +39,6 @@ impl Stack {
         if self.stack_pointer.get() == 0x01FF {
             return Err(StackError::Underflow);
         }
-        let value_address = self.stack_pointer.inc();
-        let value = Ok(bus.read(value_address));
-        bus.write(value_address, 0u8);
-        value
+        Ok(bus.read(self.stack_pointer.inc()))
     }
 }

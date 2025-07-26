@@ -1,6 +1,7 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub struct Instruction {
@@ -84,6 +85,12 @@ pub enum AddressingMode {
     ZeroPage,
     ZeroPageX,
     ZeroPageY,
+}
+
+impl Display for OpCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl AddressingMode {
