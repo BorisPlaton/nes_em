@@ -68,6 +68,28 @@ pub enum OpCode {
     TXA,
     TXS,
     TYA,
+    AAC,
+    AAX,
+    ARR,
+    ASR,
+    ATX,
+    AXA,
+    AXS,
+    DCP,
+    DOP,
+    ISC,
+    KIL,
+    LAR,
+    LAX,
+    RLA,
+    RRA,
+    SLO,
+    SRE,
+    SXA,
+    SYA,
+    TOP,
+    XAA,
+    XAS,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -436,6 +458,137 @@ lazy_static! {
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#TYA
         opcodes.insert(0x98, Instruction { opcode: OpCode::TYA, mode: AddressingMode::Implied, cycles: 2 });
 
+        // Unofficial opcodes
+        // https://www.nesdev.org/undocumented_opcodes.txt
+        opcodes.insert(0x0B, Instruction { opcode: OpCode::AAC, mode: AddressingMode::Immediate, cycles: 2 });
+        opcodes.insert(0x2B, Instruction { opcode: OpCode::AAC, mode: AddressingMode::Immediate, cycles: 2 });
+
+        opcodes.insert(0x87, Instruction { opcode: OpCode::AAX, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x97, Instruction { opcode: OpCode::AAX, mode: AddressingMode::ZeroPageY, cycles: 4 });
+        opcodes.insert(0x83, Instruction { opcode: OpCode::AAX, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0x8F, Instruction { opcode: OpCode::AAX, mode: AddressingMode::Absolute, cycles: 4 });
+
+        opcodes.insert(0x6B, Instruction { opcode: OpCode::ARR, mode: AddressingMode::Immediate, cycles: 2 });
+
+        opcodes.insert(0x4B, Instruction { opcode: OpCode::ASR, mode: AddressingMode::Immediate, cycles: 2 });
+
+        opcodes.insert(0xAB, Instruction { opcode: OpCode::ATX, mode: AddressingMode::Immediate, cycles: 2 });
+
+        opcodes.insert(0x9F, Instruction { opcode: OpCode::AXA, mode: AddressingMode::AbsoluteY, cycles: 5 });
+        opcodes.insert(0x93, Instruction { opcode: OpCode::AXA, mode: AddressingMode::IndirectIndexedY, cycles: 6 });
+
+        opcodes.insert(0xCB, Instruction { opcode: OpCode::AXS, mode: AddressingMode::Immediate, cycles: 2 });
+
+        opcodes.insert(0xC7, Instruction { opcode: OpCode::DCP, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0xD7, Instruction { opcode: OpCode::DCP, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0xCF, Instruction { opcode: OpCode::DCP, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0xDF, Instruction { opcode: OpCode::DCP, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0xDB, Instruction { opcode: OpCode::DCP, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0xC3, Instruction { opcode: OpCode::DCP, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0xD3, Instruction { opcode: OpCode::DCP, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+
+        opcodes.insert(0x04, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x14, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0x34, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0x44, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x54, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0x64, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x74, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0x80, Instruction { opcode: OpCode::DOP, mode: AddressingMode::Immediate, cycles: 2 });
+        opcodes.insert(0x82, Instruction { opcode: OpCode::DOP, mode: AddressingMode::Immediate, cycles: 2 });
+        opcodes.insert(0x89, Instruction { opcode: OpCode::DOP, mode: AddressingMode::Immediate, cycles: 2 });
+        opcodes.insert(0xC2, Instruction { opcode: OpCode::DOP, mode: AddressingMode::Immediate, cycles: 2 });
+        opcodes.insert(0xD4, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0xE2, Instruction { opcode: OpCode::DOP, mode: AddressingMode::Immediate, cycles: 2 });
+        opcodes.insert(0xF4, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+
+        opcodes.insert(0xE7, Instruction { opcode: OpCode::ISC, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0xF7, Instruction { opcode: OpCode::ISC, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0xEF, Instruction { opcode: OpCode::ISC, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0xFF, Instruction { opcode: OpCode::ISC, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0xFB, Instruction { opcode: OpCode::ISC, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0xE3, Instruction { opcode: OpCode::ISC, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0xF3, Instruction { opcode: OpCode::ISC, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+
+        opcodes.insert(0x02, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x12, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x22, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x32, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x42, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x52, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x62, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x72, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0x92, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0xB2, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0xD2, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+        opcodes.insert(0xF2, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
+
+        opcodes.insert(0xBB, Instruction { opcode: OpCode::LAR, mode: AddressingMode::AbsoluteY, cycles: 4 });
+
+        opcodes.insert(0xA7, Instruction { opcode: OpCode::LAX, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0xB7, Instruction { opcode: OpCode::LAX, mode: AddressingMode::ZeroPageY, cycles: 4 });
+        opcodes.insert(0xAF, Instruction { opcode: OpCode::LAX, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0xBF, Instruction { opcode: OpCode::LAX, mode: AddressingMode::AbsoluteY, cycles: 4 });
+        opcodes.insert(0xA3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0xB3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndirectIndexedY, cycles: 5 });
+
+        opcodes.insert(0x1A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0x3A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0x5A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0x7A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0xDA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0xFA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+
+        opcodes.insert(0x27, Instruction { opcode: OpCode::RLA, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0x37, Instruction { opcode: OpCode::RLA, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0x2F, Instruction { opcode: OpCode::RLA, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0x3F, Instruction { opcode: OpCode::RLA, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0x3B, Instruction { opcode: OpCode::RLA, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0x23, Instruction { opcode: OpCode::RLA, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0x33, Instruction { opcode: OpCode::RLA, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+
+        opcodes.insert(0x67, Instruction { opcode: OpCode::RRA, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0x77, Instruction { opcode: OpCode::RRA, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0x6F, Instruction { opcode: OpCode::RRA, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0x7F, Instruction { opcode: OpCode::RRA, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0x7B, Instruction { opcode: OpCode::RRA, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0x63, Instruction { opcode: OpCode::RRA, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0x73, Instruction { opcode: OpCode::RRA, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+
+        opcodes.insert(0xEB, Instruction { opcode: OpCode::SBC, mode: AddressingMode::Immediate, cycles: 2 });
+        
+        opcodes.insert(0x07, Instruction { opcode: OpCode::SLO, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0x17, Instruction { opcode: OpCode::SLO, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0x0F, Instruction { opcode: OpCode::SLO, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0x1F, Instruction { opcode: OpCode::SLO, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0x1B, Instruction { opcode: OpCode::SLO, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0x03, Instruction { opcode: OpCode::SLO, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0x13, Instruction { opcode: OpCode::SLO, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+
+        opcodes.insert(0x47, Instruction { opcode: OpCode::SRE, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0x57, Instruction { opcode: OpCode::SRE, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0x4F, Instruction { opcode: OpCode::SRE, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0x5F, Instruction { opcode: OpCode::SRE, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0x5B, Instruction { opcode: OpCode::SRE, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0x43, Instruction { opcode: OpCode::SRE, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0x53, Instruction { opcode: OpCode::SRE, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+        
+        opcodes.insert(0x9E, Instruction { opcode: OpCode::SXA, mode: AddressingMode::AbsoluteY, cycles: 5 });
+
+        opcodes.insert(0x9C, Instruction { opcode: OpCode::SYA, mode: AddressingMode::AbsoluteX, cycles: 5 });
+        
+        opcodes.insert(0x0C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0x1C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0x3C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0x5C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0x7C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0xDC, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0xFC, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        
+        opcodes.insert(0x8B, Instruction { opcode: OpCode::XAA, mode: AddressingMode::Immediate, cycles: 2 });
+
+        opcodes.insert(0x9B, Instruction { opcode: OpCode::XAS, mode: AddressingMode::AbsoluteY, cycles: 5 });
+        
         opcodes
     };
 }
