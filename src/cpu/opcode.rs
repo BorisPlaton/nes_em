@@ -69,7 +69,7 @@ pub enum OpCode {
     TXS,
     TYA,
     AAC,
-    AAX,
+    SAX,
     ARR,
     ASR,
     ATX,
@@ -77,7 +77,7 @@ pub enum OpCode {
     AXS,
     DCP,
     DOP,
-    ISC,
+    ISB,
     KIL,
     LAR,
     LAX,
@@ -111,7 +111,30 @@ pub enum AddressingMode {
 
 impl Display for OpCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            OpCode::AAC |
+            OpCode::SAX |
+            OpCode::ARR |
+            OpCode::ASR |
+            OpCode::ATX |
+            OpCode::AXA |
+            OpCode::AXS |
+            OpCode::DCP |
+            OpCode::ISB |
+            OpCode::KIL |
+            OpCode::LAR |
+            OpCode::LAX |
+            OpCode::RLA |
+            OpCode::RRA |
+            OpCode::SLO |
+            OpCode::SRE |
+            OpCode::SXA |
+            OpCode::SYA |
+            OpCode::XAA |
+            OpCode::XAS => write!(f, "*{:?}", self),
+            OpCode::DOP | OpCode::TOP => write!(f, "*NOP"),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 
@@ -337,6 +360,13 @@ lazy_static! {
         // NOP - No Operation
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#LSR
         opcodes.insert(0xEA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        // Illegal opcodes
+        opcodes.insert(0x1A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0x3A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0x5A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0x7A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0xDA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
+        opcodes.insert(0xFA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
 
         // ORA - Logical Inclusive OR
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#ORA
@@ -399,6 +429,8 @@ lazy_static! {
         opcodes.insert(0xF9, Instruction { opcode: OpCode::SBC, mode: AddressingMode::AbsoluteY, cycles: 4 });
         opcodes.insert(0xE1, Instruction { opcode: OpCode::SBC, mode: AddressingMode::IndexedIndirectX, cycles: 5 });
         opcodes.insert(0xF1, Instruction { opcode: OpCode::SBC, mode: AddressingMode::IndirectIndexedY, cycles: 6 });
+        // Illegal opcode
+        opcodes.insert(0xEB, Instruction { opcode: OpCode::SBC, mode: AddressingMode::Immediate, cycles: 2 });
 
         // SEC - Set Carry Flag
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#SEC
@@ -463,10 +495,10 @@ lazy_static! {
         opcodes.insert(0x0B, Instruction { opcode: OpCode::AAC, mode: AddressingMode::Immediate, cycles: 2 });
         opcodes.insert(0x2B, Instruction { opcode: OpCode::AAC, mode: AddressingMode::Immediate, cycles: 2 });
 
-        opcodes.insert(0x87, Instruction { opcode: OpCode::AAX, mode: AddressingMode::ZeroPage, cycles: 3 });
-        opcodes.insert(0x97, Instruction { opcode: OpCode::AAX, mode: AddressingMode::ZeroPageY, cycles: 4 });
-        opcodes.insert(0x83, Instruction { opcode: OpCode::AAX, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
-        opcodes.insert(0x8F, Instruction { opcode: OpCode::AAX, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0x87, Instruction { opcode: OpCode::SAX, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x97, Instruction { opcode: OpCode::SAX, mode: AddressingMode::ZeroPageY, cycles: 4 });
+        opcodes.insert(0x83, Instruction { opcode: OpCode::SAX, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0x8F, Instruction { opcode: OpCode::SAX, mode: AddressingMode::Absolute, cycles: 4 });
 
         opcodes.insert(0x6B, Instruction { opcode: OpCode::ARR, mode: AddressingMode::Immediate, cycles: 2 });
 
@@ -502,13 +534,13 @@ lazy_static! {
         opcodes.insert(0xE2, Instruction { opcode: OpCode::DOP, mode: AddressingMode::Immediate, cycles: 2 });
         opcodes.insert(0xF4, Instruction { opcode: OpCode::DOP, mode: AddressingMode::ZeroPageX, cycles: 4 });
 
-        opcodes.insert(0xE7, Instruction { opcode: OpCode::ISC, mode: AddressingMode::ZeroPage, cycles: 5 });
-        opcodes.insert(0xF7, Instruction { opcode: OpCode::ISC, mode: AddressingMode::ZeroPageX, cycles: 6 });
-        opcodes.insert(0xEF, Instruction { opcode: OpCode::ISC, mode: AddressingMode::Absolute, cycles: 6 });
-        opcodes.insert(0xFF, Instruction { opcode: OpCode::ISC, mode: AddressingMode::AbsoluteX, cycles: 7 });
-        opcodes.insert(0xFB, Instruction { opcode: OpCode::ISC, mode: AddressingMode::AbsoluteY, cycles: 7 });
-        opcodes.insert(0xE3, Instruction { opcode: OpCode::ISC, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
-        opcodes.insert(0xF3, Instruction { opcode: OpCode::ISC, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
+        opcodes.insert(0xE7, Instruction { opcode: OpCode::ISB, mode: AddressingMode::ZeroPage, cycles: 5 });
+        opcodes.insert(0xF7, Instruction { opcode: OpCode::ISB, mode: AddressingMode::ZeroPageX, cycles: 6 });
+        opcodes.insert(0xEF, Instruction { opcode: OpCode::ISB, mode: AddressingMode::Absolute, cycles: 6 });
+        opcodes.insert(0xFF, Instruction { opcode: OpCode::ISB, mode: AddressingMode::AbsoluteX, cycles: 7 });
+        opcodes.insert(0xFB, Instruction { opcode: OpCode::ISB, mode: AddressingMode::AbsoluteY, cycles: 7 });
+        opcodes.insert(0xE3, Instruction { opcode: OpCode::ISB, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
+        opcodes.insert(0xF3, Instruction { opcode: OpCode::ISB, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
 
         opcodes.insert(0x02, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
         opcodes.insert(0x12, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
@@ -532,13 +564,6 @@ lazy_static! {
         opcodes.insert(0xA3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
         opcodes.insert(0xB3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndirectIndexedY, cycles: 5 });
 
-        opcodes.insert(0x1A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
-        opcodes.insert(0x3A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
-        opcodes.insert(0x5A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
-        opcodes.insert(0x7A, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
-        opcodes.insert(0xDA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
-        opcodes.insert(0xFA, Instruction { opcode: OpCode::NOP, mode: AddressingMode::Implied, cycles: 2 });
-
         opcodes.insert(0x27, Instruction { opcode: OpCode::RLA, mode: AddressingMode::ZeroPage, cycles: 5 });
         opcodes.insert(0x37, Instruction { opcode: OpCode::RLA, mode: AddressingMode::ZeroPageX, cycles: 6 });
         opcodes.insert(0x2F, Instruction { opcode: OpCode::RLA, mode: AddressingMode::Absolute, cycles: 6 });
@@ -554,8 +579,6 @@ lazy_static! {
         opcodes.insert(0x7B, Instruction { opcode: OpCode::RRA, mode: AddressingMode::AbsoluteY, cycles: 7 });
         opcodes.insert(0x63, Instruction { opcode: OpCode::RRA, mode: AddressingMode::IndexedIndirectX, cycles: 8 });
         opcodes.insert(0x73, Instruction { opcode: OpCode::RRA, mode: AddressingMode::IndirectIndexedY, cycles: 8 });
-
-        opcodes.insert(0xEB, Instruction { opcode: OpCode::SBC, mode: AddressingMode::Immediate, cycles: 2 });
         
         opcodes.insert(0x07, Instruction { opcode: OpCode::SLO, mode: AddressingMode::ZeroPage, cycles: 5 });
         opcodes.insert(0x17, Instruction { opcode: OpCode::SLO, mode: AddressingMode::ZeroPageX, cycles: 6 });

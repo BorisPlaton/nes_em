@@ -2,11 +2,11 @@ use nes_em::bus::{Bus, IOOperation};
 use nes_em::cpu::cpu::CPU;
 use nes_em::rom::rom::Rom;
 use rand::Rng;
+use sdl2::EventPump;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
-use sdl2::EventPump;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();

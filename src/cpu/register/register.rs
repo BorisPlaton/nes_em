@@ -38,12 +38,8 @@ impl Register<u8> {
         self.value.overflowing_add(value)
     }
 
-    pub fn sub(&mut self, value: u8, store: bool) -> u8 {
-        let result = self.value.wrapping_sub(value);
-        if store {
-            self.value = result;
-        }
-        result
+    pub fn sub(&mut self, value: u8) -> u8 {
+        self.value.wrapping_sub(value)
     }
 }
 

@@ -103,6 +103,28 @@ impl CPU {
                 OpCode::TXA => self.txa(),
                 OpCode::TXS => self.txs()?,
                 OpCode::TYA => self.tya(),
+                OpCode::AAC => self.aac(&instruction.mode),
+                OpCode::SAX => self.sax(&instruction.mode),
+                OpCode::ARR => self.arr(&instruction.mode),
+                OpCode::ASR => self.asr(&instruction.mode),
+                OpCode::ATX => self.atx(&instruction.mode),
+                OpCode::AXA => self.axa(&instruction.mode),
+                OpCode::AXS => self.axs(&instruction.mode),
+                OpCode::DCP => self.dcp(&instruction.mode),
+                OpCode::DOP => self.dop(),
+                OpCode::ISB => self.isb(&instruction.mode),
+                OpCode::KIL => return Ok(()),
+                OpCode::LAR => self.lar(&instruction.mode)?,
+                OpCode::LAX => self.lax(&instruction.mode),
+                OpCode::RLA => self.rla(&instruction.mode),
+                OpCode::RRA => self.rra(&instruction.mode),
+                OpCode::SLO => self.slo(&instruction.mode),
+                OpCode::SRE => self.sre(&instruction.mode),
+                OpCode::SXA => self.sxa(&instruction.mode),
+                OpCode::SYA => self.sya(&instruction.mode),
+                OpCode::TOP => self.top(),
+                OpCode::XAA => panic!("XAA encountered. Exact operation unknown."),
+                OpCode::XAS => self.xas(&instruction.mode)?,
             };
         }
     }
@@ -115,10 +137,11 @@ impl CPU {
     // Moved ADC instruction's logic to separate function, because the same logic
     // is reused in the SBC instruction.
     fn adc_operation(&mut self, value: u8) {
-        let (result, is_carry_flag_set) = self
-            .accumulator
-            .add(value + self.status.is_carry_flag_set() as u8);
-        self.status.set_carry_flag_to(is_carry_flag_set);
+        let (result, no_borrow_add_carry) = self.accumulator.add(value);
+        let (result, borrow_add_carry) =
+            result.overflowing_add(self.status.is_carry_flag_set() as u8);
+        self.status
+            .set_carry_flag_to(borrow_add_carry | no_borrow_add_carry);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
         self.status
@@ -127,11 +150,10 @@ impl CPU {
     }
 
     fn and(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
-        let result = value & self.accumulator.get();
-        self.accumulator.set(result);
-        self.status.set_zero_flag(result);
-        self.status.set_negative_flag(result);
+        let value = self.get_value(addressing_mode) & self.accumulator.get();
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn asl(&mut self, addressing_mode: &AddressingMode) {
@@ -178,8 +200,7 @@ impl CPU {
 
     fn bit(&mut self, addressing_mode: &AddressingMode) {
         let value = self.get_value(addressing_mode);
-        let result = value & self.accumulator.get();
-        self.status.set_zero_flag(result);
+        self.status.set_zero_flag(value & self.accumulator.get());
         self.status.set_negative_flag(value);
         self.status.set_overflow_flag_to(value & 0b0100_0000 != 0);
     }
@@ -237,38 +258,37 @@ impl CPU {
 
     fn cmp(&mut self, addressing_mode: &AddressingMode) {
         let value = self.get_value(addressing_mode);
-        let accumulator_value = self.accumulator.get();
-        let result = self.accumulator.sub(value, false);
-        self.status.set_carry_flag_to(accumulator_value >= value);
+        let result = self.accumulator.sub(value);
+        self.status
+            .set_carry_flag_to(self.accumulator.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
     }
 
     fn cpx(&mut self, addressing_mode: &AddressingMode) {
         let value = self.get_value(addressing_mode);
-        let register_x_value = self.register_x.get();
-        let result = self.register_x.sub(value, false);
-        self.status.set_carry_flag_to(register_x_value >= value);
+        let result = self.register_x.sub(value);
+        self.status
+            .set_carry_flag_to(self.register_x.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
     }
 
     fn cpy(&mut self, addressing_mode: &AddressingMode) {
         let value = self.get_value(addressing_mode);
-        let register_y_value = self.register_y.get();
-        let result = self.register_y.sub(value, false);
-        self.status.set_carry_flag_to(register_y_value >= value);
+        let result = self.register_y.sub(value);
+        self.status
+            .set_carry_flag_to(self.register_y.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
     }
 
     fn dec(&mut self, addressing_mode: &AddressingMode) {
-        let value_address = self.read_operand_address(addressing_mode);
-        let value: u8 = self.bus.read(value_address);
-        let new_value = value.wrapping_sub(1);
-        self.bus.write(value_address, new_value);
-        self.status.set_zero_flag(new_value);
-        self.status.set_negative_flag(new_value);
+        let address = self.read_operand_address(addressing_mode);
+        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_sub(1);
+        self.bus.write(address, value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn dex(&mut self) {
@@ -284,31 +304,30 @@ impl CPU {
     }
 
     fn eor(&mut self, addressing_mode: &AddressingMode) {
-        let new_value = self.accumulator.get() ^ self.get_value(addressing_mode);
-        self.accumulator.set(new_value);
-        self.status.set_zero_flag(new_value);
-        self.status.set_negative_flag(new_value);
+        let value = self.accumulator.get() ^ self.get_value(addressing_mode);
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn inx(&mut self) {
-        let new_register_value = self.register_x.inc();
-        self.status.set_zero_flag(new_register_value);
-        self.status.set_negative_flag(new_register_value);
+        let value = self.register_x.inc();
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn inc(&mut self, addressing_mode: &AddressingMode) {
-        let value_address = self.read_operand_address(addressing_mode);
-        let value: u8 = self.bus.read(value_address);
-        let new_value = value.wrapping_add(1);
-        self.bus.write(value_address, new_value);
-        self.status.set_zero_flag(new_value);
-        self.status.set_negative_flag(new_value);
+        let address = self.read_operand_address(addressing_mode);
+        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_add(1);
+        self.bus.write(address, value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn iny(&mut self) {
-        let new_register_value = self.register_y.inc();
-        self.status.set_zero_flag(new_register_value);
-        self.status.set_negative_flag(new_register_value);
+        let value = self.register_y.inc();
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn jmp(&mut self, addressing_mode: &AddressingMode) {
@@ -369,11 +388,10 @@ impl CPU {
     }
 
     fn ora(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
-        let result = value | self.accumulator.get();
-        self.accumulator.set(result);
-        self.status.set_zero_flag(result);
-        self.status.set_negative_flag(result);
+        let value = self.get_value(addressing_mode) | self.accumulator.get();
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
     }
 
     fn pha(&mut self) -> Result<(), StackError> {
@@ -405,14 +423,14 @@ impl CPU {
         let (old_value, shifted_value) = match addressing_mode {
             AddressingMode::Accumulator => {
                 let old_value = self.accumulator.get();
-                let shifted_value = (old_value << 1) + self.status.get_carry_flag();
+                let shifted_value = (old_value << 1).wrapping_add(self.status.get_carry_flag());
                 self.accumulator.set(shifted_value);
                 (old_value, shifted_value)
             }
             _ => {
                 let old_value_address = self.read_operand_address(addressing_mode);
                 let old_value: u8 = self.bus.read(old_value_address);
-                let shifted_value = (old_value << 1) + self.status.get_carry_flag();
+                let shifted_value = (old_value << 1).wrapping_add(self.status.get_carry_flag());
                 self.bus.write(old_value_address, shifted_value);
                 (old_value, shifted_value)
             }
@@ -426,14 +444,16 @@ impl CPU {
         let (old_value, shifted_value) = match addressing_mode {
             AddressingMode::Accumulator => {
                 let old_value = self.accumulator.get();
-                let shifted_value = (old_value >> 1) + (self.status.get_carry_flag() << 7);
+                let shifted_value =
+                    (old_value >> 1).wrapping_add(self.status.get_carry_flag() << 7);
                 self.accumulator.set(shifted_value);
                 (old_value, shifted_value)
             }
             _ => {
                 let old_value_address = self.read_operand_address(addressing_mode);
                 let old_value: u8 = self.bus.read(old_value_address);
-                let shifted_value = (old_value >> 1) + (self.status.get_carry_flag() << 7);
+                let shifted_value =
+                    (old_value >> 1).wrapping_add(self.status.get_carry_flag() << 7);
                 self.bus.write(old_value_address, shifted_value);
                 (old_value, shifted_value)
             }
@@ -529,6 +549,198 @@ impl CPU {
         self.status.set_negative_flag(self.accumulator.get());
     }
 
+    fn aac(&mut self, addressing_mode: &AddressingMode) {
+        let value = self.get_value(addressing_mode) & self.accumulator.get();
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+        self.status.set_carry_flag_to(value & 0b1000_0000 != 0);
+    }
+
+    fn sax(&mut self, addressing_mode: &AddressingMode) {
+        let value = self.register_x.get() & self.accumulator.get();
+        let address = self.read_operand_address(addressing_mode);
+        self.bus.write(address, value);
+    }
+
+    fn arr(&mut self, addressing_mode: &AddressingMode) {
+        let value = (self.get_value(addressing_mode) & self.accumulator.get()) >> 1;
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+
+        match (value >> 5) & 0x02 {
+            0b11 => {
+                self.status.set_carry_flag_to(true);
+                self.status.set_overflow_flag_to(false);
+            }
+            0b10 => {
+                self.status.set_carry_flag_to(true);
+                self.status.set_overflow_flag_to(true);
+            }
+            0b01 => {
+                self.status.set_carry_flag_to(false);
+                self.status.set_overflow_flag_to(true);
+            }
+            _ => {
+                self.status.set_carry_flag_to(false);
+                self.status.set_overflow_flag_to(false);
+            }
+        }
+    }
+
+    fn asr(&mut self, addressing_mode: &AddressingMode) {
+        let value = self.accumulator.get() & self.get_value(addressing_mode);
+        let shifted_value = value >> 1;
+        self.accumulator.set(shifted_value);
+        self.status.set_zero_flag(shifted_value);
+        self.status.set_negative_flag(shifted_value);
+        self.status.set_carry_flag_to(value & 0b0000_0001 != 0);
+    }
+
+    fn atx(&mut self, addressing_mode: &AddressingMode) {
+        let value = self.get_value(addressing_mode) & self.accumulator.get();
+        self.register_x.set(value);
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+    }
+
+    fn axa(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        self.bus.write(
+            address,
+            self.register_x.get() & self.accumulator.get() & address.to_be_bytes()[0],
+        );
+    }
+
+    fn axs(&mut self, addressing_mode: &AddressingMode) {
+        let value = (self.accumulator.get() & self.register_x.get())
+            .wrapping_sub(self.get_value(addressing_mode));
+        self.register_x.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+    }
+
+    fn dcp(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_sub(1);
+        self.bus.write(address, value);
+
+        let result = self.accumulator.sub(value);
+        self.status
+            .set_carry_flag_to(self.accumulator.get() >= value);
+        self.status.set_zero_flag(result);
+        self.status.set_negative_flag(result);
+    }
+
+    fn dop(&mut self) {
+        self.program_counter.inc();
+    }
+
+    fn isb(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_add(1);
+        self.bus.write(address, value);
+        self.adc_operation(!value);
+    }
+
+    fn lar(&mut self, addressing_mode: &AddressingMode) -> Result<(), StackError> {
+        let value = self.get_value(addressing_mode) & self.stack.get_pointer();
+        self.register_x.set(value);
+        self.accumulator.set(value);
+        self.stack.set_pointer(value)?;
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+        Ok(())
+    }
+
+    fn lax(&mut self, addressing_mode: &AddressingMode) {
+        let value = self.get_value(addressing_mode);
+        self.register_x.set(value);
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+    }
+
+    fn rla(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let mut value: u8 = self.bus.read(address);
+        let carry_flag = self.status.get_carry_flag();
+
+        self.status.set_carry_flag_to(value & 0b1000_0000 != 0);
+        value = (value << 1).wrapping_add(carry_flag);
+        self.bus.write(address, value);
+
+        value = value & self.accumulator.get();
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+    }
+
+    fn rra(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let mut value: u8 = self.bus.read(address);
+        let set_carry_flag = value & 0b0000_0001 != 0;
+        value = (value >> 1).wrapping_add(self.status.get_carry_flag() << 7);
+        self.status.set_carry_flag_to(set_carry_flag);
+        self.bus.write(address, value);
+        self.adc_operation(value);
+    }
+
+    fn slo(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let mut value: u8 = self.bus.read(address);
+
+        self.status.set_carry_flag_to(value & 0b1000_0000 != 0);
+        value <<= 1;
+        self.bus.write(address, value);
+
+        value = value | self.accumulator.get();
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+    }
+
+    fn sre(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let mut value: u8 = self.bus.read(address);
+
+        self.status.set_carry_flag_to(value & 0b0000_0001 != 0);
+        value >>= 1;
+        self.bus.write(address, value);
+
+        value = value ^ self.accumulator.get();
+        self.accumulator.set(value);
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+    }
+
+    fn sxa(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let result = (self.register_x.get() & address.to_be_bytes()[0]).wrapping_add(1);
+        self.bus.write(address, result);
+    }
+
+    fn sya(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.read_operand_address(addressing_mode);
+        let result = (self.register_y.get() & address.to_be_bytes()[0]).wrapping_add(1);
+        self.bus.write(address, result);
+    }
+
+    fn top(&mut self) {
+        self.program_counter.add(2);
+    }
+
+    fn xas(&mut self, addressing_mode: &AddressingMode) -> Result<(), StackError> {
+        let address = self.read_operand_address(addressing_mode);
+        let result = self.register_x.get() & self.accumulator.get();
+        self.stack.set_pointer(result)?;
+        self.bus
+            .write(address, (result & address.to_be_bytes()[0]).wrapping_add(1));
+        Ok(())
+    }
+
     fn next_instruction(&mut self) -> Result<&'static Instruction, UnknownOpCode> {
         let opcode = self.bus.read(self.program_counter.get());
         self.program_counter.inc();
@@ -542,21 +754,17 @@ impl CPU {
         address
     }
 
-    fn get_operand_address(&self, addressing_mode: &AddressingMode, addr: u16) -> u16 {
+    fn get_operand_address(&self, addressing_mode: &AddressingMode, address: u16) -> u16 {
         match addressing_mode {
-            AddressingMode::Absolute => self.bus.read(addr),
-            AddressingMode::AbsoluteX => {
-                let value_address: u16 = self.bus.read(addr);
-                value_address.wrapping_add(self.register_x.get() as u16)
-            }
-            AddressingMode::AbsoluteY => {
-                let value_address: u16 = self.bus.read(addr);
-                value_address.wrapping_add(self.register_y.get() as u16)
-            }
-            AddressingMode::Immediate | AddressingMode::Relative => addr,
+            AddressingMode::Absolute => self.bus.read(address),
+            AddressingMode::AbsoluteX => IOOperation::<u16>::read(&self.bus, address)
+                .wrapping_add(self.register_x.get() as u16),
+            AddressingMode::AbsoluteY => IOOperation::<u16>::read(&self.bus, address)
+                .wrapping_add(self.register_y.get() as u16),
+            AddressingMode::Immediate | AddressingMode::Relative => address,
             AddressingMode::IndexedIndirectX => {
-                let mut indirect_address: u8 = self.bus.read(addr);
-                indirect_address = indirect_address.wrapping_add(self.register_x.get());
+                let indirect_address: u8 =
+                    IOOperation::<u8>::read(&self.bus, address).wrapping_add(self.register_x.get());
                 // TODO: Maybe it is better to move this logic into the bus
                 if (indirect_address & 0xFF) == 0 {
                     self.bus.read(indirect_address as u16)
@@ -568,7 +776,7 @@ impl CPU {
                 }
             }
             AddressingMode::Indirect => {
-                let indirect_address = self.bus.read(addr);
+                let indirect_address = self.bus.read(address);
                 let indirect_address_suffix = indirect_address as u8;
 
                 // TODO: Maybe it is better to move this logic into the bus
@@ -589,7 +797,7 @@ impl CPU {
                 }
             }
             AddressingMode::IndirectIndexedY => {
-                let indirect_address: u8 = self.bus.read(addr);
+                let indirect_address: u8 = self.bus.read(address);
                 // TODO: Maybe it is better to move this logic into the bus
                 let real_address = if (indirect_address & 0xFF) == 0 {
                     self.bus.read(indirect_address as u16)
@@ -601,18 +809,13 @@ impl CPU {
                 };
                 real_address.wrapping_add(self.register_y.get() as u16)
             }
-            AddressingMode::ZeroPage => {
-                let address: u8 = self.bus.read(addr);
-                address as u16
-            }
-            AddressingMode::ZeroPageX => {
-                let address: u8 = self.bus.read(addr);
-                address.wrapping_add(self.register_x.get()) as u16
-            }
-            AddressingMode::ZeroPageY => {
-                let address: u8 = self.bus.read(addr);
-                address.wrapping_add(self.register_y.get()) as u16
-            }
+            AddressingMode::ZeroPage => IOOperation::<u8>::read(&self.bus, address) as u16,
+            AddressingMode::ZeroPageX => IOOperation::<u8>::read(&self.bus, address)
+                .wrapping_add(self.register_x.get())
+                as u16,
+            AddressingMode::ZeroPageY => IOOperation::<u8>::read(&self.bus, address)
+                .wrapping_add(self.register_y.get())
+                as u16,
             // TODO: Add error instead of panic
             AddressingMode::Accumulator | AddressingMode::Implied => {
                 panic!("Mode {addressing_mode:?} can't have address")
@@ -621,8 +824,8 @@ impl CPU {
     }
 
     fn get_value(&mut self, addressing_mode: &AddressingMode) -> u8 {
-        let value_address = self.read_operand_address(addressing_mode);
-        self.bus.read(value_address)
+        let address = self.read_operand_address(addressing_mode);
+        self.bus.read(address)
     }
 }
 
@@ -784,7 +987,11 @@ mod tests {
             "{:04x}  {:8} {: >4} {}",
             program_counter,
             hex_str,
-            opcode.opcode.to_string(),
+            match raw_opcode {
+                0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => "*NOP".to_string(),
+                0xEB => "*SBC".to_string(),
+                _ => opcode.opcode.to_string(),
+            },
             tmp
         )
         .trim()
