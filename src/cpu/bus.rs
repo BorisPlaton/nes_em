@@ -1,3 +1,4 @@
+use crate::ppu::ppu::PPU;
 use crate::rom::rom::Rom;
 
 const CPU_RAM_START: u16 = 0x0000;
@@ -9,9 +10,10 @@ const PPU_IO_REGISTERS_END: u16 = 0x3FFF;
 const PRG_ROM_START: u16 = 0x8000;
 const PRG_ROM_END: u16 = 0xFFFF;
 
-pub struct Bus {
+pub struct CPUBus {
     cpu_ram: [u8; 2048],
-    rom: Rom,
+    prg_rom: Vec<u8>,
+    ppu: PPU,
 }
 
 pub trait IOOperation<T> {
@@ -20,16 +22,17 @@ pub trait IOOperation<T> {
     fn write(&mut self, address: u16, value: T);
 }
 
-impl Bus {
-    pub fn new(rom: Rom) -> Bus {
-        Bus {
+impl CPUBus {
+    pub fn new(rom: Rom) -> CPUBus {
+        CPUBus {
             cpu_ram: [0; 2048],
-            rom,
+            prg_rom: rom.prg_rom,
+            ppu: PPU::new(rom.chr_rom, rom.mirroring),
         }
     }
 }
 
-impl IOOperation<u8> for Bus {
+impl IOOperation<u8> for CPUBus {
     fn read(&self, mut address: u16) -> u8 {
         match address {
             CPU_RAM_START..=CPU_RAM_END => self.cpu_ram[(address & 0b0000_0111_1111_1111) as usize],
@@ -39,10 +42,10 @@ impl IOOperation<u8> for Bus {
             }
             PRG_ROM_START..=PRG_ROM_END => {
                 address -= 0x8000;
-                if self.rom.prg_rom.len() == 0x4000 && address >= 0x4000 {
+                if self.prg_rom.len() == 0x4000 && address >= 0x4000 {
                     address &= 0x3FFF;
                 }
-                self.rom.prg_rom[address as usize]
+                self.prg_rom[address as usize]
             }
             _ => panic!("Invalid address"),
         }
@@ -63,7 +66,7 @@ impl IOOperation<u8> for Bus {
     }
 }
 
-impl IOOperation<u16> for Bus {
+impl IOOperation<u16> for CPUBus {
     fn read(&self, mut address: u16) -> u16 {
         match address {
             CPU_RAM_START..=CPU_RAM_END => {
@@ -80,13 +83,13 @@ impl IOOperation<u16> for Bus {
             }
             PRG_ROM_START..=PRG_ROM_END => {
                 address -= 0x8000;
-                if self.rom.prg_rom.len() == 0x4000 && address >= 0x4000 {
+                if self.prg_rom.len() == 0x4000 && address >= 0x4000 {
                     address &= 0x3FFF;
                 }
                 // TODO: Here probably must be an error. Reading beyond 0xFFFF
                 u16::from_le_bytes([
-                    self.rom.prg_rom[address as usize],
-                    self.rom.prg_rom[(address + 1) as usize],
+                    self.prg_rom[address as usize],
+                    self.prg_rom[(address + 1) as usize],
                 ])
             }
             _ => panic!("Invalid address"),

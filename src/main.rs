@@ -1,4 +1,4 @@
-use nes_em::bus::{Bus, IOOperation};
+use nes_em::cpu::bus::{CPUBus, IOOperation};
 use nes_em::cpu::cpu::CPU;
 use nes_em::rom::rom::Rom;
 use rand::Rng;
@@ -28,7 +28,7 @@ fn main() {
 
     let bytes: Vec<u8> = std::fs::read("./ines/snake.nes").unwrap();
     let rom = Rom::new(&bytes).unwrap();
-    let bus = Bus::new(rom);
+    let bus = CPUBus::new(rom);
     let mut cpu = CPU::new(bus);
     cpu.reset();
     let mut screen_state = [0u8; 32 * 3 * 32];

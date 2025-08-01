@@ -1,4 +1,5 @@
-use crate::rom::control_bytes::{ControlBytes, Mirroring, NESFormat};
+use crate::ppu::mirroring::Mirroring;
+use crate::rom::control_bytes::{ControlBytes, NESFormat};
 use crate::rom::error::InvalidINESFile;
 
 pub const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
@@ -9,7 +10,7 @@ pub struct Rom {
     pub prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
     mapper: u8,
-    mirroring: Mirroring,
+    pub mirroring: Mirroring,
 }
 
 impl Rom {

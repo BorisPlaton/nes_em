@@ -1,8 +1,4 @@
-pub enum Mirroring {
-    Vertical,
-    Horizontal,
-    FourScreen,
-}
+use crate::ppu::mirroring::Mirroring;
 
 #[derive(PartialEq)]
 pub enum NESFormat {

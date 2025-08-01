@@ -1,4 +1,4 @@
-use crate::bus::{Bus, IOOperation};
+use crate::cpu::bus::{CPUBus, IOOperation};
 use crate::cpu::error::StackError;
 use crate::cpu::register::register::Register;
 
@@ -25,7 +25,7 @@ impl Stack {
         Ok(())
     }
 
-    pub fn push(&mut self, value: u8, bus: &mut Bus) -> Result<(), StackError> {
+    pub fn push(&mut self, value: u8, bus: &mut CPUBus) -> Result<(), StackError> {
         let address = self.stack_pointer.get();
         if address < 0x0100 {
             return Err(StackError::Overflow);
@@ -35,7 +35,7 @@ impl Stack {
         Ok(())
     }
 
-    pub fn pull(&mut self, bus: &mut Bus) -> Result<u8, StackError> {
+    pub fn pull(&mut self, bus: &mut CPUBus) -> Result<u8, StackError> {
         if self.stack_pointer.get() == 0x01FF {
             return Err(StackError::Underflow);
         }

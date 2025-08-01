@@ -1,4 +1,4 @@
-use crate::bus::{Bus, IOOperation};
+use crate::cpu::bus::{CPUBus, IOOperation};
 use crate::cpu::error::{StackError, UnknownOpCode};
 use crate::cpu::opcode::OPCODES;
 use crate::cpu::opcode::{AddressingMode, Instruction, OpCode};
@@ -14,12 +14,12 @@ pub struct CPU {
     register_y: Register<u8>,
     program_counter: ProgramCounter,
     status: Status,
-    pub bus: Bus,
+    pub bus: CPUBus,
     stack: Stack,
 }
 
 impl CPU {
-    pub fn new(bus: Bus) -> Self {
+    pub fn new(bus: CPUBus) -> Self {
         CPU {
             accumulator: Register::new(0),
             register_x: Register::new(0),
@@ -853,7 +853,7 @@ mod tests {
 
     fn setup_cpu_with_program(program: Vec<u8>) -> CPU {
         let rom = Rom::new(&program).unwrap();
-        let bus = Bus::new(rom);
+        let bus = CPUBus::new(rom);
         let mut cpu = CPU::new(bus);
         cpu.reset();
         cpu
