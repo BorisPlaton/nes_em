@@ -492,6 +492,7 @@ lazy_static! {
 
         // Unofficial opcodes
         // https://www.nesdev.org/undocumented_opcodes.txt
+        // https://www.nesdev.org/wiki/Programming_with_unofficial_opcodes
         opcodes.insert(0x0B, Instruction { opcode: OpCode::AAC, mode: AddressingMode::Immediate, cycles: 2 });
         opcodes.insert(0x2B, Instruction { opcode: OpCode::AAC, mode: AddressingMode::Immediate, cycles: 2 });
 

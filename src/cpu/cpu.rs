@@ -285,7 +285,7 @@ impl CPU {
 
     fn dec(&mut self, addressing_mode: &AddressingMode) {
         let address = self.read_operand_address(addressing_mode);
-        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_sub(1);
+        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -318,7 +318,7 @@ impl CPU {
 
     fn inc(&mut self, addressing_mode: &AddressingMode) {
         let address = self.read_operand_address(addressing_mode);
-        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_add(1);
+        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -624,7 +624,7 @@ impl CPU {
 
     fn dcp(&mut self, addressing_mode: &AddressingMode) {
         let address = self.read_operand_address(addressing_mode);
-        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_sub(1);
+        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
 
         let result = self.accumulator.sub(value);
@@ -640,7 +640,7 @@ impl CPU {
 
     fn isb(&mut self, addressing_mode: &AddressingMode) {
         let address = self.read_operand_address(addressing_mode);
-        let value = IOOperation::<u8>::read(&self.bus, address).wrapping_add(1);
+        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.adc_operation(!value);
     }
@@ -754,17 +754,17 @@ impl CPU {
         address
     }
 
-    fn get_operand_address(&self, addressing_mode: &AddressingMode, address: u16) -> u16 {
+    fn get_operand_address(&mut self, addressing_mode: &AddressingMode, address: u16) -> u16 {
         match addressing_mode {
             AddressingMode::Absolute => self.bus.read(address),
-            AddressingMode::AbsoluteX => IOOperation::<u16>::read(&self.bus, address)
+            AddressingMode::AbsoluteX => IOOperation::<u16>::read(&mut self.bus, address)
                 .wrapping_add(self.register_x.get() as u16),
-            AddressingMode::AbsoluteY => IOOperation::<u16>::read(&self.bus, address)
+            AddressingMode::AbsoluteY => IOOperation::<u16>::read(&mut self.bus, address)
                 .wrapping_add(self.register_y.get() as u16),
             AddressingMode::Immediate | AddressingMode::Relative => address,
             AddressingMode::IndexedIndirectX => {
-                let indirect_address: u8 =
-                    IOOperation::<u8>::read(&self.bus, address).wrapping_add(self.register_x.get());
+                let indirect_address: u8 = IOOperation::<u8>::read(&mut self.bus, address)
+                    .wrapping_add(self.register_x.get());
                 // TODO: Maybe it is better to move this logic into the bus
                 if (indirect_address & 0xFF) == 0 {
                     self.bus.read(indirect_address as u16)
@@ -809,11 +809,11 @@ impl CPU {
                 };
                 real_address.wrapping_add(self.register_y.get() as u16)
             }
-            AddressingMode::ZeroPage => IOOperation::<u8>::read(&self.bus, address) as u16,
-            AddressingMode::ZeroPageX => IOOperation::<u8>::read(&self.bus, address)
+            AddressingMode::ZeroPage => IOOperation::<u8>::read(&mut self.bus, address) as u16,
+            AddressingMode::ZeroPageX => IOOperation::<u8>::read(&mut self.bus, address)
                 .wrapping_add(self.register_x.get())
                 as u16,
-            AddressingMode::ZeroPageY => IOOperation::<u8>::read(&self.bus, address)
+            AddressingMode::ZeroPageY => IOOperation::<u8>::read(&mut self.bus, address)
                 .wrapping_add(self.register_y.get())
                 as u16,
             // TODO: Add error instead of panic
@@ -859,7 +859,7 @@ mod tests {
         cpu
     }
 
-    fn trace(cpu: &CPU) -> String {
+    fn trace(cpu: &mut CPU) -> String {
         let program_counter = cpu.program_counter.get();
         let raw_opcode = cpu.bus.read(program_counter);
         let opcode = OPCODES

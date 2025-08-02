@@ -19,7 +19,7 @@ use bitflags::{Flags, bitflags};
 // |          (0: read backdrop from EXT pins; 1: output color on EXT pins)
 // +--------- Vblank NMI enable (0: off, 1: on)
 bitflags! {
-    pub struct ControlRegister: u8 {
+    pub struct PPUCTRL: u8 {
         const NAMETABLE_ADDR_1 = 0b0000_0001;
         const NAMETABLE_ADDR_2 = 0b0000_0010;
         const ADDR_INCREMENT = 0b0000_0100;
@@ -31,20 +31,20 @@ bitflags! {
     }
 }
 
-impl ControlRegister {
+impl PPUCTRL {
     pub fn new() -> Self {
-        ControlRegister::from_bits_truncate(0)
+        PPUCTRL::from_bits_truncate(0)
     }
 
     pub fn address_increment(&self) -> u8 {
-        if self.contains(ControlRegister::ADDR_INCREMENT) {
+        if self.contains(PPUCTRL::ADDR_INCREMENT) {
             32
         } else {
             1
         }
     }
 
-    pub fn update(&mut self, value: u8) {
-        *self = ControlRegister::from_bits_truncate(value);
+    pub fn write(&mut self, value: u8) {
+        *self = PPUCTRL::from_bits_truncate(value);
     }
 }

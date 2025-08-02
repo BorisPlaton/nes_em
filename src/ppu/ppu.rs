@@ -1,7 +1,13 @@
 use crate::ppu::mirroring::Mirroring;
-use crate::ppu::register::addr::AddressRegister;
-use crate::ppu::register::control::ControlRegister;
-use crate::ppu::register::data::DataRegister;
+use crate::ppu::register::oamaddr::OAMADDR;
+use crate::ppu::register::oamdata::OAMDATA;
+use crate::ppu::register::oamdma::OAMDMA;
+use crate::ppu::register::ppuaddr::PPUADDR;
+use crate::ppu::register::ppuctrl::PPUCTRL;
+use crate::ppu::register::ppudata::PPUDATA;
+use crate::ppu::register::ppumask::PPUMASK;
+use crate::ppu::register::ppuscroll::PPUSCROLL;
+use crate::ppu::register::ppustatus::PPUSTATUS;
 
 const CHR_ROM_START: u16 = 0x0000;
 const CHR_ROM_END: u16 = 0x1FFF;
@@ -17,9 +23,21 @@ const PPU_PALETTE_RAM_START: u16 = 0x3F00;
 const PPU_PALETTE_RAM_END: u16 = 0x3FFF;
 
 pub struct PPU {
-    address_register: AddressRegister,
-    data_register: DataRegister,
-    control_register: ControlRegister,
+    // PPU Registers
+    // https://www.nesdev.org/wiki/PPU_registers
+    ppuctrl: PPUCTRL,
+    ppumask: PPUMASK,
+    ppustatus: PPUSTATUS,
+    oamaddr: OAMADDR,
+    oamdata: OAMDATA,
+    ppuscroll: PPUSCROLL,
+    ppuaddr: PPUADDR,
+    ppudata: PPUDATA,
+    oamdma: OAMDMA,
+
+    // Internal Registers
+    // https://www.nesdev.org/wiki/PPU_registers#Internal_registers
+    register_w: bool,
 
     chr_rom: Vec<u8>,
     mirroring: Mirroring,
@@ -31,9 +49,17 @@ pub struct PPU {
 impl PPU {
     pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
         PPU {
-            address_register: AddressRegister::new(),
-            data_register: DataRegister::new(),
-            control_register: ControlRegister::new(),
+            ppuctrl: PPUCTRL::new(),
+            ppumask: PPUMASK::new(),
+            ppustatus: PPUSTATUS::new(),
+            oamaddr: OAMADDR::new(),
+            oamdata: OAMDATA::new(),
+            ppuscroll: PPUSCROLL::new(),
+            ppuaddr: PPUADDR::new(),
+            ppudata: PPUDATA::new(),
+            oamdma: OAMDMA::new(),
+
+            register_w: true,
 
             chr_rom,
             mirroring,
@@ -43,33 +69,33 @@ impl PPU {
         }
     }
 
+    pub fn write_ppuctrl(&mut self, value: u8) {
+        self.ppuctrl.write(value);
+    }
+
+    pub fn write_ppumask(&mut self, value: u8) {
+        self.ppumask.write(value);
+    }
+
+    pub fn write_oamaddr(&mut self, value: u8) {
+        self.oamaddr.write(value);
+    }
+
+    pub fn write_oamdata(&mut self, value: u8) {
+        self.oam_data[self.oamaddr.read() as usize] = value;
+        self.oamaddr.inc()
+    }
+
+    pub fn write_ppuscroll(&mut self, value: u8) {
+        self.ppuscroll.write(value, &mut self.register_w);
+    }
+
     pub fn write_ppuaddr(&mut self, address_part: u8) {
-        self.address_register.update(address_part);
+        self.ppuaddr.write(address_part, &mut self.register_w);
     }
 
-    pub fn write_to_ppuctrl(&mut self, value: u8) {
-        self.control_register.update(value);
-    }
-
-    pub fn read_from_ppuaddr(&mut self) -> u8 {
-        let address = self.address_register.get();
-        self.increment_ppuaddr();
-
-        match address {
-            CHR_ROM_START..=CHR_ROM_END => self.data_register.read(self.chr_rom[address as usize]),
-            PPU_VRAM_START..=PPU_VRAM_END | PPU_UNUSED_SPACE_START..=PPU_UNUSED_SPACE_END => self
-                .data_register
-                .read(self.vram[self.mirror_vram_addr(address) as usize]),
-            PPU_PALETTE_RAM_START..=PPU_PALETTE_RAM_END => {
-                self.palette_table[(address - PPU_PALETTE_RAM_START) as usize]
-            }
-            _ => panic!("unexpected access to mirrored space {address}"),
-        }
-    }
-
-    pub fn write_to_ppuadr(&mut self) {
-        let address = self.address_register.get();
-        let value = self.data_register.get_write_value();
+    pub fn write_ppudata(&mut self, value: u8) {
+        let address = self.ppuaddr.read();
         self.increment_ppuaddr();
 
         match address {
@@ -84,9 +110,36 @@ impl PPU {
         };
     }
 
+    pub fn write_oamdma(&mut self, value: u8) {
+        self.oamdma.write(value);
+    }
+
+    pub fn read_ppustatus(&mut self) -> u8 {
+        self.ppustatus.read(&mut self.register_w)
+    }
+
+    pub fn read_oamdata(&self) -> u8 {
+        self.oam_data[self.oamaddr.read() as usize]
+    }
+
+    pub fn read_ppudata(&mut self) -> u8 {
+        let address = self.ppuaddr.read();
+        self.increment_ppuaddr();
+
+        match address {
+            CHR_ROM_START..=CHR_ROM_END => self.ppudata.read(self.chr_rom[address as usize]),
+            PPU_VRAM_START..=PPU_VRAM_END | PPU_UNUSED_SPACE_START..=PPU_UNUSED_SPACE_END => self
+                .ppudata
+                .read(self.vram[self.mirror_vram_addr(address) as usize]),
+            PPU_PALETTE_RAM_START..=PPU_PALETTE_RAM_END => {
+                self.palette_table[(address - PPU_PALETTE_RAM_START) as usize]
+            }
+            _ => panic!("unexpected access to mirrored space {address}"),
+        }
+    }
+
     fn increment_ppuaddr(&mut self) {
-        self.address_register
-            .increment(self.control_register.address_increment());
+        self.ppuaddr.inc(self.ppuctrl.address_increment());
     }
 
     // https://www.nesdev.org/wiki/Mirroring#Nametable_Mirroring

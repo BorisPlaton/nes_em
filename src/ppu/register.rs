@@ -1,3 +1,9 @@
-pub mod addr;
-pub mod control;
-pub mod data;
+pub mod oamaddr;
+pub mod oamdata;
+pub mod oamdma;
+pub mod ppuaddr;
+pub mod ppuctrl;
+pub mod ppudata;
+pub mod ppumask;
+pub mod ppuscroll;
+pub mod ppustatus;

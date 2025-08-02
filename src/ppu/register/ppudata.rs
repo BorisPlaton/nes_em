@@ -6,21 +6,13 @@
 // DDDD DDDD
 // |||| ||||
 // ++++-++++- VRAM data
-pub struct DataRegister {
-    write_value: u8,
+pub struct PPUDATA {
     read_buffer: u8,
 }
 
-impl DataRegister {
+impl PPUDATA {
     pub fn new() -> Self {
-        DataRegister {
-            write_value: 0,
-            read_buffer: 0,
-        }
-    }
-
-    pub fn get_write_value(&self) -> u8 {
-        self.write_value
+        PPUDATA { read_buffer: 0 }
     }
 
     pub fn read(&mut self, buffer_value: u8) -> u8 {

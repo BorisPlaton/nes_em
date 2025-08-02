@@ -1,3 +1,3 @@
 pub mod cpu;
-pub mod ppu;
+mod ppu;
 pub mod rom;
