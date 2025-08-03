@@ -2,14 +2,14 @@
 // https://www.nesdev.org/wiki/PPU_registers#PPUSCROLL
 //
 // 1st write
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // XXXX XXXX
 // |||| ||||
 // ++++-++++- X scroll bits 7-0 (bit 8 in PPUCTRL bit 0)
 //
 // 2nd write
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // YYYY YYYY
 // |||| ||||

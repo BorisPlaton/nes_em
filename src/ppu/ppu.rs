@@ -44,6 +44,9 @@ pub struct PPU {
     vram: [u8; 2048],
     palette_table: [u8; 32],
     oam_data: [u8; 256],
+
+    scanline: u16,
+    cycles: usize,
 }
 
 impl PPU {
@@ -66,7 +69,35 @@ impl PPU {
             vram: [0; 2048],
             palette_table: [0; 32],
             oam_data: [0; 256],
+
+            scanline: 0,
+            cycles: 0,
         }
+    }
+
+    pub fn tick(&mut self, cycles: u8) -> bool {
+        self.cycles += cycles as usize;
+
+        if self.cycles < 341 {
+            return false;
+        }
+
+        self.cycles -= 341;
+        self.scanline += 1;
+
+        // https://www.nesdev.org/wiki/PPU_rendering#Vertical_blanking_lines_(241-260)
+        if (self.scanline == 241) & (self.ppuctrl.is_vblank_nmi_set()) {
+            self.ppustatus.set_vblank_flag_to(true);
+            todo!("Should trigger NMI interrupt")
+        }
+
+        if self.scanline >= 262 {
+            self.scanline = 0;
+            self.ppustatus.set_vblank_flag_to(false);
+            return true;
+        }
+
+        false
     }
 
     pub fn write_ppuctrl(&mut self, value: u8) {

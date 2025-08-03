@@ -1,7 +1,7 @@
 // OAMADDR - Sprite RAM address ($2003 write)
 // https://www.nesdev.org/wiki/PPU_registers#OAMADDR
 //
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // AAAA AAAA
 // |||| ||||

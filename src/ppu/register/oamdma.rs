@@ -1,7 +1,7 @@
 // OAMDMA - Sprite DMA ($4014 write)
-// https://www.nesdev.org/wiki/PPU_registers#OAMDMA_-_Sprite_DMA_($4014_write)
+// https://www.nesdev.org/wiki/PPU_registers#OAMDMA
 //
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // AAAA AAAA
 // |||| ||||

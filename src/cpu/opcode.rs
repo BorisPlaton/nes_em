@@ -165,24 +165,24 @@ lazy_static! {
         // ADC - Add with Carry
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#ADC
         opcodes.insert(0x69, Instruction { opcode: OpCode::ADC, mode: AddressingMode::Immediate, cycles: 2 });
-        opcodes.insert(0x65, Instruction { opcode: OpCode::ADC, mode: AddressingMode::ZeroPage, cycles: 2 });
-        opcodes.insert(0x75, Instruction { opcode: OpCode::ADC, mode: AddressingMode::ZeroPageX, cycles: 2 });
-        opcodes.insert(0x6D, Instruction { opcode: OpCode::ADC, mode: AddressingMode::Absolute, cycles: 3 });
-        opcodes.insert(0x7D, Instruction { opcode: OpCode::ADC, mode: AddressingMode::AbsoluteX, cycles: 3 });
-        opcodes.insert(0x79, Instruction { opcode: OpCode::ADC, mode: AddressingMode::AbsoluteY, cycles: 3 });
-        opcodes.insert(0x61, Instruction { opcode: OpCode::ADC, mode: AddressingMode::IndexedIndirectX, cycles: 2 });
-        opcodes.insert(0x71, Instruction { opcode: OpCode::ADC, mode: AddressingMode::IndirectIndexedY, cycles: 2 });
+        opcodes.insert(0x65, Instruction { opcode: OpCode::ADC, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x75, Instruction { opcode: OpCode::ADC, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0x6D, Instruction { opcode: OpCode::ADC, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0x7D, Instruction { opcode: OpCode::ADC, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x79, Instruction { opcode: OpCode::ADC, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x61, Instruction { opcode: OpCode::ADC, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0x71, Instruction { opcode: OpCode::ADC, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         // AND - Logical AND
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#AND
         opcodes.insert(0x29, Instruction { opcode: OpCode::AND, mode: AddressingMode::Immediate, cycles: 2 });
-        opcodes.insert(0x25, Instruction { opcode: OpCode::AND, mode: AddressingMode::ZeroPage, cycles: 2 });
-        opcodes.insert(0x35, Instruction { opcode: OpCode::AND, mode: AddressingMode::ZeroPageX, cycles: 2 });
-        opcodes.insert(0x2D, Instruction { opcode: OpCode::AND, mode: AddressingMode::Absolute, cycles: 3 });
-        opcodes.insert(0x3D, Instruction { opcode: OpCode::AND, mode: AddressingMode::AbsoluteX, cycles: 3 });
-        opcodes.insert(0x39, Instruction { opcode: OpCode::AND, mode: AddressingMode::AbsoluteY, cycles: 3 });
-        opcodes.insert(0x21, Instruction { opcode: OpCode::AND, mode: AddressingMode::IndexedIndirectX, cycles: 2 });
-        opcodes.insert(0x31, Instruction { opcode: OpCode::AND, mode: AddressingMode::IndirectIndexedY, cycles: 2 });
+        opcodes.insert(0x25, Instruction { opcode: OpCode::AND, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0x35, Instruction { opcode: OpCode::AND, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0x2D, Instruction { opcode: OpCode::AND, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0x3D, Instruction { opcode: OpCode::AND, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x39, Instruction { opcode: OpCode::AND, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x21, Instruction { opcode: OpCode::AND, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0x31, Instruction { opcode: OpCode::AND, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         // ASL - Arithmetic Shift Left
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#ASL
@@ -194,40 +194,44 @@ lazy_static! {
 
         // BCC - Branch if Carry Clear
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BCC
-        opcodes.insert(0x90, Instruction { opcode: OpCode::BCC, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0x90, Instruction { opcode: OpCode::BCC, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // BCS - Branch if Carry Set
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BCS
-        opcodes.insert(0xB0, Instruction { opcode: OpCode::BCS, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0xB0, Instruction { opcode: OpCode::BCS, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // BEQ - Branch if Equal
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BEQ
-        opcodes.insert(0xF0, Instruction { opcode: OpCode::BEQ, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0xF0, Instruction { opcode: OpCode::BEQ, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // BIT - BIT Test
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BIT
-        opcodes.insert(0x24, Instruction { opcode: OpCode::BIT, mode: AddressingMode::ZeroPage, cycles: 2 });
+        opcodes.insert(0x24, Instruction { opcode: OpCode::BIT, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0x2C, Instruction { opcode: OpCode::BIT, mode: AddressingMode::Absolute, cycles: 4 });
 
         // BMI - Branch if Minus
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BMI
-        opcodes.insert(0x30, Instruction { opcode: OpCode::BMI, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0x30, Instruction { opcode: OpCode::BMI, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // BNE - Branch if Not Equal
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BNE
-        opcodes.insert(0xD0, Instruction { opcode: OpCode::BNE, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0xD0, Instruction { opcode: OpCode::BNE, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // BPL - Branch if Positive
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BPL
-        opcodes.insert(0x10, Instruction { opcode: OpCode::BPL, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0x10, Instruction { opcode: OpCode::BPL, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
+
+        // BRK - Force Interrupt
+        // https://www.nesdev.org/obelisk-6502-guide/reference.html#BRK
+        opcodes.insert(0x00, Instruction { opcode: OpCode::BRK, mode: AddressingMode::Implied, cycles: 7 });
 
         // BVC - Branch if Overflow Clear
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BVC
-        opcodes.insert(0x50, Instruction { opcode: OpCode::BVC, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0x50, Instruction { opcode: OpCode::BVC, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // BVS - Branch if Overflow Set
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#BVS
-        opcodes.insert(0x70, Instruction { opcode: OpCode::BVS, mode: AddressingMode::Relative, cycles: 2 });
+        opcodes.insert(0x70, Instruction { opcode: OpCode::BVS, mode: AddressingMode::Relative, cycles: 2 }); // +1 cycle if branch succeeds +2 if to a new page
 
         // CLC - Clear Carry Flag
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#CLC
@@ -245,20 +249,16 @@ lazy_static! {
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#CLI
         opcodes.insert(0xB8, Instruction { opcode: OpCode::CLV, mode: AddressingMode::Implied, cycles: 2 });
 
-        // BRK - Force Interrupt
-        // https://www.nesdev.org/obelisk-6502-guide/reference.html#BRK
-        opcodes.insert(0x00, Instruction { opcode: OpCode::BRK, mode: AddressingMode::Implied, cycles: 1 });
-
         // CMP - Compare
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#CMP
         opcodes.insert(0xC9, Instruction { opcode: OpCode::CMP, mode: AddressingMode::Immediate, cycles: 2 });
-        opcodes.insert(0xC5, Instruction { opcode: OpCode::CMP, mode: AddressingMode::ZeroPage, cycles: 2 });
-        opcodes.insert(0xD5, Instruction { opcode: OpCode::CMP, mode: AddressingMode::ZeroPageX, cycles: 2 });
-        opcodes.insert(0xCD, Instruction { opcode: OpCode::CMP, mode: AddressingMode::Absolute, cycles: 3 });
-        opcodes.insert(0xDD, Instruction { opcode: OpCode::CMP, mode: AddressingMode::AbsoluteX, cycles: 3 });
-        opcodes.insert(0xD9, Instruction { opcode: OpCode::CMP, mode: AddressingMode::AbsoluteY, cycles: 3 });
-        opcodes.insert(0xC1, Instruction { opcode: OpCode::CMP, mode: AddressingMode::IndexedIndirectX, cycles: 2 });
-        opcodes.insert(0xD1, Instruction { opcode: OpCode::CMP, mode: AddressingMode::IndirectIndexedY, cycles: 2 });
+        opcodes.insert(0xC5, Instruction { opcode: OpCode::CMP, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0xD5, Instruction { opcode: OpCode::CMP, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0xCD, Instruction { opcode: OpCode::CMP, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0xDD, Instruction { opcode: OpCode::CMP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xD9, Instruction { opcode: OpCode::CMP, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xC1, Instruction { opcode: OpCode::CMP, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0xD1, Instruction { opcode: OpCode::CMP, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         // CPX - Compare X Register
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#CPX
@@ -293,10 +293,10 @@ lazy_static! {
         opcodes.insert(0x45, Instruction { opcode: OpCode::EOR, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0x55, Instruction { opcode: OpCode::EOR, mode: AddressingMode::ZeroPageX, cycles: 4 });
         opcodes.insert(0x4D, Instruction { opcode: OpCode::EOR, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0x5D, Instruction { opcode: OpCode::EOR, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0x59, Instruction { opcode: OpCode::EOR, mode: AddressingMode::AbsoluteY, cycles: 4 });
+        opcodes.insert(0x5D, Instruction { opcode: OpCode::EOR, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x59, Instruction { opcode: OpCode::EOR, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
         opcodes.insert(0x41, Instruction { opcode: OpCode::EOR, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
-        opcodes.insert(0x51, Instruction { opcode: OpCode::EOR, mode: AddressingMode::IndirectIndexedY, cycles: 5 });
+        opcodes.insert(0x51, Instruction { opcode: OpCode::EOR, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         // INC - Increment Memory
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#INC
@@ -325,13 +325,13 @@ lazy_static! {
         // LDA - Load Accumulator
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#LDA
         opcodes.insert(0xA9, Instruction { opcode: OpCode::LDA, mode: AddressingMode::Immediate, cycles: 2 });
-        opcodes.insert(0xA5, Instruction { opcode: OpCode::LDA, mode: AddressingMode::ZeroPage, cycles: 2 });
-        opcodes.insert(0xB5, Instruction { opcode: OpCode::LDA, mode: AddressingMode::ZeroPageX, cycles: 2 });
-        opcodes.insert(0xAD, Instruction { opcode: OpCode::LDA, mode: AddressingMode::Absolute, cycles: 3 });
-        opcodes.insert(0xBD, Instruction { opcode: OpCode::LDA, mode: AddressingMode::AbsoluteX, cycles: 3 });
-        opcodes.insert(0xB9, Instruction { opcode: OpCode::LDA, mode: AddressingMode::AbsoluteY, cycles: 3 });
-        opcodes.insert(0xA1, Instruction { opcode: OpCode::LDA, mode: AddressingMode::IndexedIndirectX, cycles: 2 });
-        opcodes.insert(0xB1, Instruction { opcode: OpCode::LDA, mode: AddressingMode::IndirectIndexedY, cycles: 2 });
+        opcodes.insert(0xA5, Instruction { opcode: OpCode::LDA, mode: AddressingMode::ZeroPage, cycles: 3 });
+        opcodes.insert(0xB5, Instruction { opcode: OpCode::LDA, mode: AddressingMode::ZeroPageX, cycles: 4 });
+        opcodes.insert(0xAD, Instruction { opcode: OpCode::LDA, mode: AddressingMode::Absolute, cycles: 4 });
+        opcodes.insert(0xBD, Instruction { opcode: OpCode::LDA, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xB9, Instruction { opcode: OpCode::LDA, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xA1, Instruction { opcode: OpCode::LDA, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0xB1, Instruction { opcode: OpCode::LDA, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         // LDX - Load X Register
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX
@@ -339,7 +339,7 @@ lazy_static! {
         opcodes.insert(0xA6, Instruction { opcode: OpCode::LDX, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0xB6, Instruction { opcode: OpCode::LDX, mode: AddressingMode::ZeroPageY, cycles: 4 });
         opcodes.insert(0xAE, Instruction { opcode: OpCode::LDX, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0xBE, Instruction { opcode: OpCode::LDX, mode: AddressingMode::AbsoluteY, cycles: 4 });
+        opcodes.insert(0xBE, Instruction { opcode: OpCode::LDX, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
 
         // LDY - Load Y Register
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#LDY
@@ -347,7 +347,7 @@ lazy_static! {
         opcodes.insert(0xA4, Instruction { opcode: OpCode::LDY, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0xB4, Instruction { opcode: OpCode::LDY, mode: AddressingMode::ZeroPageX, cycles: 4 });
         opcodes.insert(0xAC, Instruction { opcode: OpCode::LDY, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0xBC, Instruction { opcode: OpCode::LDY, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0xBC, Instruction { opcode: OpCode::LDY, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
 
         // LSR - Logical Shift Right
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#LSR
@@ -371,13 +371,13 @@ lazy_static! {
         // ORA - Logical Inclusive OR
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#ORA
         opcodes.insert(0x09, Instruction { opcode: OpCode::ORA, mode: AddressingMode::Immediate, cycles: 2 });
-        opcodes.insert(0x05, Instruction { opcode: OpCode::ORA, mode: AddressingMode::ZeroPage, cycles: 2 });
+        opcodes.insert(0x05, Instruction { opcode: OpCode::ORA, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0x15, Instruction { opcode: OpCode::ORA, mode: AddressingMode::ZeroPageX, cycles: 4 });
         opcodes.insert(0x0D, Instruction { opcode: OpCode::ORA, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0x1D, Instruction { opcode: OpCode::ORA, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0x19, Instruction { opcode: OpCode::ORA, mode: AddressingMode::AbsoluteY, cycles: 4 });
-        opcodes.insert(0x01, Instruction { opcode: OpCode::ORA, mode: AddressingMode::IndexedIndirectX, cycles: 5 });
-        opcodes.insert(0x11, Instruction { opcode: OpCode::ORA, mode: AddressingMode::IndirectIndexedY, cycles: 6 });
+        opcodes.insert(0x1D, Instruction { opcode: OpCode::ORA, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x19, Instruction { opcode: OpCode::ORA, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x01, Instruction { opcode: OpCode::ORA, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0x11, Instruction { opcode: OpCode::ORA, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         // PHA - Push Accumulator
         // https://www.nesdev.org/obelisk-6502-guide/reference.html#PHA
@@ -425,10 +425,10 @@ lazy_static! {
         opcodes.insert(0xE5, Instruction { opcode: OpCode::SBC, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0xF5, Instruction { opcode: OpCode::SBC, mode: AddressingMode::ZeroPageX, cycles: 4 });
         opcodes.insert(0xED, Instruction { opcode: OpCode::SBC, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0xFD, Instruction { opcode: OpCode::SBC, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0xF9, Instruction { opcode: OpCode::SBC, mode: AddressingMode::AbsoluteY, cycles: 4 });
-        opcodes.insert(0xE1, Instruction { opcode: OpCode::SBC, mode: AddressingMode::IndexedIndirectX, cycles: 5 });
-        opcodes.insert(0xF1, Instruction { opcode: OpCode::SBC, mode: AddressingMode::IndirectIndexedY, cycles: 6 });
+        opcodes.insert(0xFD, Instruction { opcode: OpCode::SBC, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xF9, Instruction { opcode: OpCode::SBC, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xE1, Instruction { opcode: OpCode::SBC, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
+        opcodes.insert(0xF1, Instruction { opcode: OpCode::SBC, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
         // Illegal opcode
         opcodes.insert(0xEB, Instruction { opcode: OpCode::SBC, mode: AddressingMode::Immediate, cycles: 2 });
 
@@ -556,14 +556,14 @@ lazy_static! {
         opcodes.insert(0xD2, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
         opcodes.insert(0xF2, Instruction { opcode: OpCode::KIL, mode: AddressingMode::Implied, cycles: 0 });
 
-        opcodes.insert(0xBB, Instruction { opcode: OpCode::LAR, mode: AddressingMode::AbsoluteY, cycles: 4 });
+        opcodes.insert(0xBB, Instruction { opcode: OpCode::LAR, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
 
         opcodes.insert(0xA7, Instruction { opcode: OpCode::LAX, mode: AddressingMode::ZeroPage, cycles: 3 });
         opcodes.insert(0xB7, Instruction { opcode: OpCode::LAX, mode: AddressingMode::ZeroPageY, cycles: 4 });
         opcodes.insert(0xAF, Instruction { opcode: OpCode::LAX, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0xBF, Instruction { opcode: OpCode::LAX, mode: AddressingMode::AbsoluteY, cycles: 4 });
+        opcodes.insert(0xBF, Instruction { opcode: OpCode::LAX, mode: AddressingMode::AbsoluteY, cycles: 4 }); // +1 cycle if page crossed
         opcodes.insert(0xA3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndexedIndirectX, cycles: 6 });
-        opcodes.insert(0xB3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndirectIndexedY, cycles: 5 });
+        opcodes.insert(0xB3, Instruction { opcode: OpCode::LAX, mode: AddressingMode::IndirectIndexedY, cycles: 5 }); // +1 cycle if page crossed
 
         opcodes.insert(0x27, Instruction { opcode: OpCode::RLA, mode: AddressingMode::ZeroPage, cycles: 5 });
         opcodes.insert(0x37, Instruction { opcode: OpCode::RLA, mode: AddressingMode::ZeroPageX, cycles: 6 });
@@ -602,12 +602,12 @@ lazy_static! {
         opcodes.insert(0x9C, Instruction { opcode: OpCode::SYA, mode: AddressingMode::AbsoluteX, cycles: 5 });
         
         opcodes.insert(0x0C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::Absolute, cycles: 4 });
-        opcodes.insert(0x1C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0x3C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0x5C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0x7C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0xDC, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
-        opcodes.insert(0xFC, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 });
+        opcodes.insert(0x1C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x3C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x5C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0x7C, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xDC, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
+        opcodes.insert(0xFC, Instruction { opcode: OpCode::TOP, mode: AddressingMode::AbsoluteX, cycles: 4 }); // +1 cycle if page crossed
         
         opcodes.insert(0x8B, Instruction { opcode: OpCode::XAA, mode: AddressingMode::Immediate, cycles: 2 });
 

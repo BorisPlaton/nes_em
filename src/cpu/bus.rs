@@ -25,6 +25,7 @@ pub struct CPUBus {
     cpu_ram: [u8; 2048],
     prg_rom: Vec<u8>,
     ppu: PPU,
+    cycles: usize,
 }
 
 pub trait IOOperation<T> {
@@ -39,7 +40,13 @@ impl CPUBus {
             cpu_ram: [0; 2048],
             prg_rom: rom.prg_rom,
             ppu: PPU::new(rom.chr_rom, rom.mirroring),
+            cycles: 0,
         }
+    }
+
+    pub fn tick(&mut self, cycles: u8) {
+        self.cycles += cycles as usize;
+        self.ppu.tick(cycles * 3);
     }
 }
 

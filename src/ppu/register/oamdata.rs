@@ -1,7 +1,7 @@
 // OAMDATA - Sprite RAM data ($2004 read/write)
-// https://www.nesdev.org/wiki/PPU_registers#OAMDATA_-_Sprite_RAM_data_($2004_read/write)
+// https://www.nesdev.org/wiki/PPU_registers#OAMDATA
 //
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // DDDD DDDD
 // |||| ||||

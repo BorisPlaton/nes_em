@@ -8,6 +8,8 @@ use crate::cpu::register::stack::Stack;
 use crate::cpu::register::status::Status;
 use std::error::Error;
 
+type PageCrossed = bool;
+
 pub struct CPU {
     accumulator: Register<u8>,
     register_x: Register<u8>,
@@ -37,6 +39,7 @@ impl CPU {
         self.register_x.set(0);
         self.register_y.set(0);
         self.status.reset();
+        self.stack.reset();
     }
 
     pub fn run<F>(&mut self, mut callback: F) -> Result<(), Box<dyn Error>>
@@ -46,92 +49,94 @@ impl CPU {
         loop {
             callback(self);
             let instruction = self.next_instruction()?;
-            match instruction.opcode {
-                OpCode::ADC => self.adc(&instruction.mode),
-                OpCode::AND => self.and(&instruction.mode),
-                OpCode::ASL => self.asl(&instruction.mode),
-                OpCode::BCC => self.bcc(&instruction.mode),
-                OpCode::BCS => self.bcs(&instruction.mode),
-                OpCode::BEQ => self.beq(&instruction.mode),
-                OpCode::BIT => self.bit(&instruction.mode),
-                OpCode::BMI => self.bmi(&instruction.mode),
-                OpCode::BNE => self.bne(&instruction.mode),
-                OpCode::BPL => self.bpl(&instruction.mode),
+            let passed_cycles = match instruction.opcode {
+                OpCode::ADC => self.adc(&instruction),
+                OpCode::AND => self.and(&instruction),
+                OpCode::ASL => self.asl(&instruction),
+                OpCode::BCC => self.bcc(&instruction),
+                OpCode::BCS => self.bcs(&instruction),
+                OpCode::BEQ => self.beq(&instruction),
+                OpCode::BIT => self.bit(&instruction),
+                OpCode::BMI => self.bmi(&instruction),
+                OpCode::BNE => self.bne(&instruction),
+                OpCode::BPL => self.bpl(&instruction),
                 OpCode::BRK => return Ok(()),
-                OpCode::BVC => self.bvc(&instruction.mode),
-                OpCode::BVS => self.bvs(&instruction.mode),
-                OpCode::CLC => self.clc(),
-                OpCode::CLD => self.cld(),
-                OpCode::CLI => self.cli(),
-                OpCode::CLV => self.clv(),
-                OpCode::CMP => self.cmp(&instruction.mode),
-                OpCode::CPX => self.cpx(&instruction.mode),
-                OpCode::CPY => self.cpy(&instruction.mode),
-                OpCode::DEC => self.dec(&instruction.mode),
-                OpCode::DEX => self.dex(),
-                OpCode::DEY => self.dey(),
-                OpCode::EOR => self.eor(&instruction.mode),
-                OpCode::INC => self.inc(&instruction.mode),
-                OpCode::INX => self.inx(),
-                OpCode::INY => self.iny(),
-                OpCode::JMP => self.jmp(&instruction.mode),
-                OpCode::JSR => self.jsr(&instruction.mode)?,
-                OpCode::LDA => self.lda(&instruction.mode),
-                OpCode::LDX => self.ldx(&instruction.mode),
-                OpCode::LDY => self.ldy(&instruction.mode),
-                OpCode::LSR => self.lsr(&instruction.mode),
-                OpCode::NOP => (),
-                OpCode::ORA => self.ora(&instruction.mode),
-                OpCode::PHA => self.pha()?,
-                OpCode::PHP => self.php()?,
-                OpCode::PLA => self.pla()?,
-                OpCode::PLP => self.plp()?,
-                OpCode::ROL => self.rol(&instruction.mode),
-                OpCode::ROR => self.ror(&instruction.mode),
-                OpCode::RTI => self.rti()?,
-                OpCode::RTS => self.rts()?,
-                OpCode::SBC => self.sbc(&instruction.mode),
-                OpCode::SEC => self.sec(),
-                OpCode::SED => self.sed(),
-                OpCode::SEI => self.sei(),
-                OpCode::STA => self.sta(&instruction.mode),
-                OpCode::STX => self.stx(&instruction.mode),
-                OpCode::STY => self.sty(&instruction.mode),
-                OpCode::TAX => self.tax(),
-                OpCode::TAY => self.tay(),
-                OpCode::TSX => self.tsx(),
-                OpCode::TXA => self.txa(),
-                OpCode::TXS => self.txs()?,
-                OpCode::TYA => self.tya(),
-                OpCode::AAC => self.aac(&instruction.mode),
-                OpCode::SAX => self.sax(&instruction.mode),
-                OpCode::ARR => self.arr(&instruction.mode),
-                OpCode::ASR => self.asr(&instruction.mode),
-                OpCode::ATX => self.atx(&instruction.mode),
-                OpCode::AXA => self.axa(&instruction.mode),
-                OpCode::AXS => self.axs(&instruction.mode),
-                OpCode::DCP => self.dcp(&instruction.mode),
-                OpCode::DOP => self.dop(),
-                OpCode::ISB => self.isb(&instruction.mode),
+                OpCode::BVC => self.bvc(&instruction),
+                OpCode::BVS => self.bvs(&instruction),
+                OpCode::CLC => self.clc(&instruction),
+                OpCode::CLD => self.cld(&instruction),
+                OpCode::CLI => self.cli(&instruction),
+                OpCode::CLV => self.clv(&instruction),
+                OpCode::CMP => self.cmp(&instruction),
+                OpCode::CPX => self.cpx(&instruction),
+                OpCode::CPY => self.cpy(&instruction),
+                OpCode::DEC => self.dec(&instruction),
+                OpCode::DEX => self.dex(&instruction),
+                OpCode::DEY => self.dey(&instruction),
+                OpCode::EOR => self.eor(&instruction),
+                OpCode::INC => self.inc(&instruction),
+                OpCode::INX => self.inx(&instruction),
+                OpCode::INY => self.iny(&instruction),
+                OpCode::JMP => self.jmp(&instruction),
+                OpCode::JSR => self.jsr(&instruction)?,
+                OpCode::LDA => self.lda(&instruction),
+                OpCode::LDX => self.ldx(&instruction),
+                OpCode::LDY => self.ldy(&instruction),
+                OpCode::LSR => self.lsr(&instruction),
+                OpCode::NOP => self.nop(&instruction),
+                OpCode::ORA => self.ora(&instruction),
+                OpCode::PHA => self.pha(&instruction)?,
+                OpCode::PHP => self.php(&instruction)?,
+                OpCode::PLA => self.pla(&instruction)?,
+                OpCode::PLP => self.plp(&instruction)?,
+                OpCode::ROL => self.rol(&instruction),
+                OpCode::ROR => self.ror(&instruction),
+                OpCode::RTI => self.rti(&instruction)?,
+                OpCode::RTS => self.rts(&instruction)?,
+                OpCode::SBC => self.sbc(&instruction),
+                OpCode::SEC => self.sec(&instruction),
+                OpCode::SED => self.sed(&instruction),
+                OpCode::SEI => self.sei(&instruction),
+                OpCode::STA => self.sta(&instruction),
+                OpCode::STX => self.stx(&instruction),
+                OpCode::STY => self.sty(&instruction),
+                OpCode::TAX => self.tax(&instruction),
+                OpCode::TAY => self.tay(&instruction),
+                OpCode::TSX => self.tsx(&instruction),
+                OpCode::TXA => self.txa(&instruction),
+                OpCode::TXS => self.txs(&instruction)?,
+                OpCode::TYA => self.tya(&instruction),
+                OpCode::AAC => self.aac(&instruction),
+                OpCode::SAX => self.sax(&instruction),
+                OpCode::ARR => self.arr(&instruction),
+                OpCode::ASR => self.asr(&instruction),
+                OpCode::ATX => self.atx(&instruction),
+                OpCode::AXA => self.axa(&instruction),
+                OpCode::AXS => self.axs(&instruction),
+                OpCode::DCP => self.dcp(&instruction),
+                OpCode::DOP => self.dop(&instruction),
+                OpCode::ISB => self.isb(&instruction),
                 OpCode::KIL => return Ok(()),
-                OpCode::LAR => self.lar(&instruction.mode)?,
-                OpCode::LAX => self.lax(&instruction.mode),
-                OpCode::RLA => self.rla(&instruction.mode),
-                OpCode::RRA => self.rra(&instruction.mode),
-                OpCode::SLO => self.slo(&instruction.mode),
-                OpCode::SRE => self.sre(&instruction.mode),
-                OpCode::SXA => self.sxa(&instruction.mode),
-                OpCode::SYA => self.sya(&instruction.mode),
-                OpCode::TOP => self.top(),
-                OpCode::XAA => panic!("XAA encountered. Exact operation unknown."),
-                OpCode::XAS => self.xas(&instruction.mode)?,
+                OpCode::LAR => self.lar(&instruction)?,
+                OpCode::LAX => self.lax(&instruction),
+                OpCode::RLA => self.rla(&instruction),
+                OpCode::RRA => self.rra(&instruction),
+                OpCode::SLO => self.slo(&instruction),
+                OpCode::SRE => self.sre(&instruction),
+                OpCode::SXA => self.sxa(&instruction),
+                OpCode::SYA => self.sya(&instruction),
+                OpCode::TOP => self.top(&instruction),
+                OpCode::XAA => panic!("XAA encountered. Exact behaviour is unknown."),
+                OpCode::XAS => self.xas(&instruction)?,
             };
+            self.bus.tick(passed_cycles);
         }
     }
 
-    fn adc(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn adc(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         self.adc_operation(value);
+        instruction.cycles + page_crossed as u8
     }
 
     // Moved ADC instruction's logic to separate function, because the same logic
@@ -149,14 +154,17 @@ impl CPU {
         self.accumulator.set(result);
     }
 
-    fn and(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode) & self.accumulator.get();
+    fn and(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, mut value) = self.get_value(&instruction.mode);
+        value &= self.accumulator.get();
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn asl(&mut self, addressing_mode: &AddressingMode) {
+    fn asl(&mut self, instruction: &Instruction) -> u8 {
+        let addressing_mode = &instruction.mode;
         let (old_value, shifted_value) = match addressing_mode {
             AddressingMode::Accumulator => {
                 let old_value = self.accumulator.get();
@@ -165,7 +173,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
             _ => {
-                let old_value_address = self.read_operand_address(addressing_mode);
+                let (_, old_value_address) = self.read_operand_address(addressing_mode);
                 let old_value: u8 = self.bus.read(old_value_address);
                 let shifted_value = old_value << 1;
                 self.bus.write(old_value_address, shifted_value);
@@ -175,199 +183,244 @@ impl CPU {
         self.status.set_carry_flag_to(old_value & 0b1000_0000 != 0);
         self.status.set_negative_flag(shifted_value);
         self.status.set_zero_flag(shifted_value);
+        instruction.cycles
     }
 
-    fn bcc(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bcc(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if !self.status.is_carry_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn bcs(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bcs(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if self.status.is_carry_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn beq(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn beq(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if self.status.is_zero_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn bit(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn bit(&mut self, instruction: &Instruction) -> u8 {
+        let (_, value) = self.get_value(&instruction.mode);
         self.status.set_zero_flag(value & self.accumulator.get());
         self.status.set_negative_flag(value);
         self.status.set_overflow_flag_to(value & 0b0100_0000 != 0);
+        instruction.cycles
     }
 
-    fn bmi(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bmi(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if self.status.is_negative_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn bne(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bne(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if !self.status.is_zero_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn bpl(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bpl(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if !self.status.is_negative_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn bvc(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bvc(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if !self.status.is_overflow_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn bvs(&mut self, addressing_mode: &AddressingMode) {
-        let offset = self.get_value(addressing_mode);
+    fn bvs(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, offset) = self.get_value(&instruction.mode);
         if self.status.is_overflow_flag_set() {
             self.program_counter.move_with_offset(offset);
+            instruction.cycles + if page_crossed { 2 } else { 1 }
+        } else {
+            instruction.cycles
         }
     }
 
-    fn clc(&mut self) {
+    fn clc(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_carry_flag_to(false);
+        instruction.cycles
     }
 
-    fn cld(&mut self) {
+    fn cld(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_decimal_mode_flag_to(false);
+        instruction.cycles
     }
 
-    fn cli(&mut self) {
+    fn cli(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_interrupt_disable_flag_to(false);
+        instruction.cycles
     }
 
-    fn clv(&mut self) {
+    fn clv(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_overflow_flag_to(false);
+        instruction.cycles
     }
 
-    fn cmp(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn cmp(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         let result = self.accumulator.sub(value);
         self.status
             .set_carry_flag_to(self.accumulator.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn cpx(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn cpx(&mut self, instruction: &Instruction) -> u8 {
+        let (_, value) = self.get_value(&instruction.mode);
         let result = self.register_x.sub(value);
         self.status
             .set_carry_flag_to(self.register_x.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
+        instruction.cycles
     }
 
-    fn cpy(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn cpy(&mut self, instruction: &Instruction) -> u8 {
+        let (_, value) = self.get_value(&instruction.mode);
         let result = self.register_y.sub(value);
         self.status
             .set_carry_flag_to(self.register_y.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
+        instruction.cycles
     }
 
-    fn dec(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn dec(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn dex(&mut self) {
+    fn dex(&mut self, instruction: &Instruction) -> u8 {
         self.register_x.dec();
         self.status.set_zero_flag(self.register_x.get());
         self.status.set_negative_flag(self.register_x.get());
+        instruction.cycles
     }
 
-    fn dey(&mut self) {
+    fn dey(&mut self, instruction: &Instruction) -> u8 {
         self.register_y.dec();
         self.status.set_zero_flag(self.register_y.get());
         self.status.set_negative_flag(self.register_y.get());
+        instruction.cycles
     }
 
-    fn eor(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.accumulator.get() ^ self.get_value(addressing_mode);
+    fn eor(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, mut value) = self.get_value(&instruction.mode);
+        value ^= self.accumulator.get();
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn inx(&mut self) {
-        let value = self.register_x.inc();
-        self.status.set_zero_flag(value);
-        self.status.set_negative_flag(value);
-    }
-
-    fn inc(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn inc(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn iny(&mut self) {
+    fn inx(&mut self, instruction: &Instruction) -> u8 {
+        let value = self.register_x.inc();
+        self.status.set_zero_flag(value);
+        self.status.set_negative_flag(value);
+        instruction.cycles
+    }
+
+    fn iny(&mut self, instruction: &Instruction) -> u8 {
         let value = self.register_y.inc();
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn jmp(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn jmp(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         self.program_counter.set(address);
+        instruction.cycles
     }
 
-    fn jsr(&mut self, addressing_mode: &AddressingMode) -> Result<(), StackError> {
-        let address = self.read_operand_address(addressing_mode);
+    fn jsr(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let current_address_bytes: [u8; 2] =
             self.program_counter.get().wrapping_sub(1).to_be_bytes();
         self.stack.push(current_address_bytes[0], &mut self.bus)?;
         self.stack.push(current_address_bytes[1], &mut self.bus)?;
         self.program_counter.set(address);
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn lda(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn lda(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn ldx(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn ldx(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         self.register_x.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn ldy(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn ldy(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         self.register_y.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn lsr(&mut self, addressing_mode: &AddressingMode) {
-        let (old_value, shifted_value) = match addressing_mode {
+    fn lsr(&mut self, instruction: &Instruction) -> u8 {
+        let (old_value, shifted_value) = match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_value = self.accumulator.get();
                 let shifted_value = old_value >> 1;
@@ -375,7 +428,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
             _ => {
-                let old_value_address = self.read_operand_address(addressing_mode);
+                let (_, old_value_address) = self.read_operand_address(&instruction.mode);
                 let old_value: u8 = self.bus.read(old_value_address);
                 let shifted_value = old_value >> 1;
                 self.bus.write(old_value_address, shifted_value);
@@ -385,42 +438,49 @@ impl CPU {
         self.status.set_carry_flag_to(old_value & 1 != 0);
         self.status.set_negative_flag(0);
         self.status.set_zero_flag(shifted_value);
+        instruction.cycles
     }
 
-    fn ora(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode) | self.accumulator.get();
+    fn nop(&mut self, instruction: &Instruction) -> u8 {
+        instruction.cycles
+    }
+
+    fn ora(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, mut value) = self.get_value(&instruction.mode);
+        value |= self.accumulator.get();
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn pha(&mut self) -> Result<(), StackError> {
+    fn pha(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         self.stack.push(self.accumulator.get(), &mut self.bus)?;
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn php(&mut self) -> Result<(), StackError> {
+    fn php(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let status = self.status.get() | 0b0001_0000;
         self.stack.push(status, &mut self.bus)?;
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn pla(&mut self) -> Result<(), StackError> {
+    fn pla(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let value = self.stack.pull(&mut self.bus)?;
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn plp(&mut self) -> Result<(), StackError> {
+    fn plp(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let value = self.stack.pull(&mut self.bus)? & 0xEF | 0x20;
         self.status.set(value);
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn rol(&mut self, addressing_mode: &AddressingMode) {
-        let (old_value, shifted_value) = match addressing_mode {
+    fn rol(&mut self, instruction: &Instruction) -> u8 {
+        let (old_value, shifted_value) = match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_value = self.accumulator.get();
                 let shifted_value = (old_value << 1).wrapping_add(self.status.get_carry_flag());
@@ -428,7 +488,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
             _ => {
-                let old_value_address = self.read_operand_address(addressing_mode);
+                let (_, old_value_address) = self.read_operand_address(&instruction.mode);
                 let old_value: u8 = self.bus.read(old_value_address);
                 let shifted_value = (old_value << 1).wrapping_add(self.status.get_carry_flag());
                 self.bus.write(old_value_address, shifted_value);
@@ -438,10 +498,11 @@ impl CPU {
         self.status.set_carry_flag_to(old_value & 0b1000_0000 != 0);
         self.status.set_negative_flag(shifted_value);
         self.status.set_zero_flag(shifted_value);
+        instruction.cycles
     }
 
-    fn ror(&mut self, addressing_mode: &AddressingMode) {
-        let (old_value, shifted_value) = match addressing_mode {
+    fn ror(&mut self, instruction: &Instruction) -> u8 {
+        let (old_value, shifted_value) = match instruction.mode {
             AddressingMode::Accumulator => {
                 let old_value = self.accumulator.get();
                 let shifted_value =
@@ -450,7 +511,7 @@ impl CPU {
                 (old_value, shifted_value)
             }
             _ => {
-                let old_value_address = self.read_operand_address(addressing_mode);
+                let (_, old_value_address) = self.read_operand_address(&instruction.mode);
                 let old_value: u8 = self.bus.read(old_value_address);
                 let shifted_value =
                     (old_value >> 1).wrapping_add(self.status.get_carry_flag() << 7);
@@ -461,110 +522,127 @@ impl CPU {
         self.status.set_carry_flag_to(old_value & 1 != 0);
         self.status.set_negative_flag(shifted_value);
         self.status.set_zero_flag(shifted_value);
+        instruction.cycles
     }
 
-    fn rti(&mut self) -> Result<(), StackError> {
+    fn rti(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let status = self.stack.pull(&mut self.bus)?;
         let program_counter_lo = self.stack.pull(&mut self.bus)?;
         let program_counter_hi = self.stack.pull(&mut self.bus)?;
         self.status.set(status);
         self.program_counter
             .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]));
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn rts(&mut self) -> Result<(), StackError> {
+    fn rts(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let program_counter_lo = self.stack.pull(&mut self.bus)?;
         let program_counter_hi = self.stack.pull(&mut self.bus)?;
         self.program_counter
             .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]).wrapping_add(1));
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn sbc(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn sbc(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         self.adc_operation(!value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn sec(&mut self) {
+    fn sec(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_carry_flag_to(true);
+        instruction.cycles
     }
 
-    fn sed(&mut self) {
+    fn sed(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_decimal_mode_flag_to(true);
+        instruction.cycles
     }
 
-    fn sei(&mut self) {
+    fn sei(&mut self, instruction: &Instruction) -> u8 {
         self.status.set_interrupt_disable_flag_to(true);
+        instruction.cycles
     }
 
-    fn sta(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn sta(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         self.bus.write(address, self.accumulator.get());
+        instruction.cycles
     }
 
-    fn stx(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn stx(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         self.bus.write(address, self.register_x.get());
+        instruction.cycles
     }
 
-    fn sty(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn sty(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         self.bus.write(address, self.register_y.get());
+        instruction.cycles
     }
 
-    fn tax(&mut self) {
+    fn tax(&mut self, instruction: &Instruction) -> u8 {
         self.register_x.set(self.accumulator.get());
         self.status.set_zero_flag(self.register_x.get());
         self.status.set_negative_flag(self.register_x.get());
+        instruction.cycles
     }
 
-    fn tay(&mut self) {
+    fn tay(&mut self, instruction: &Instruction) -> u8 {
         self.register_y.set(self.accumulator.get());
         self.status.set_zero_flag(self.register_y.get());
         self.status.set_negative_flag(self.register_y.get());
+        instruction.cycles
     }
 
-    fn tsx(&mut self) {
+    fn tsx(&mut self, instruction: &Instruction) -> u8 {
         self.register_x.set(self.stack.get_pointer());
         self.status.set_zero_flag(self.register_x.get());
         self.status.set_negative_flag(self.register_x.get());
+        instruction.cycles
     }
 
-    fn txa(&mut self) {
+    fn txa(&mut self, instruction: &Instruction) -> u8 {
         self.accumulator.set(self.register_x.get());
         self.status.set_zero_flag(self.accumulator.get());
         self.status.set_negative_flag(self.accumulator.get());
+        instruction.cycles
     }
 
-    fn txs(&mut self) -> Result<(), StackError> {
+    fn txs(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let new_pointer = self.register_x.get();
         self.stack.set_pointer(new_pointer)?;
-        Ok(())
+        Ok(instruction.cycles)
     }
 
-    fn tya(&mut self) {
+    fn tya(&mut self, instruction: &Instruction) -> u8 {
         self.accumulator.set(self.register_y.get());
         self.status.set_zero_flag(self.accumulator.get());
         self.status.set_negative_flag(self.accumulator.get());
+        instruction.cycles
     }
 
-    fn aac(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode) & self.accumulator.get();
+    fn aac(&mut self, instruction: &Instruction) -> u8 {
+        let (_, mut value) = self.get_value(&instruction.mode);
+        value &= self.accumulator.get();
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
         self.status.set_carry_flag_to(value & 0b1000_0000 != 0);
+        instruction.cycles
     }
 
-    fn sax(&mut self, addressing_mode: &AddressingMode) {
+    fn sax(&mut self, instruction: &Instruction) -> u8 {
         let value = self.register_x.get() & self.accumulator.get();
-        let address = self.read_operand_address(addressing_mode);
+        let (_, address) = self.read_operand_address(&instruction.mode);
         self.bus.write(address, value);
+        instruction.cycles
     }
 
-    fn arr(&mut self, addressing_mode: &AddressingMode) {
-        let value = (self.get_value(addressing_mode) & self.accumulator.get()) >> 1;
+    fn arr(&mut self, instruction: &Instruction) -> u8 {
+        let (_, mut value) = self.get_value(&instruction.mode);
+        value = (value & self.accumulator.get()) >> 1;
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -586,44 +664,52 @@ impl CPU {
                 self.status.set_carry_flag_to(false);
                 self.status.set_overflow_flag_to(false);
             }
-        }
+        };
+
+        instruction.cycles
     }
 
-    fn asr(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.accumulator.get() & self.get_value(addressing_mode);
+    fn asr(&mut self, instruction: &Instruction) -> u8 {
+        let (_, mut value) = self.get_value(&instruction.mode);
+        value &= self.accumulator.get();
         let shifted_value = value >> 1;
         self.accumulator.set(shifted_value);
         self.status.set_zero_flag(shifted_value);
         self.status.set_negative_flag(shifted_value);
         self.status.set_carry_flag_to(value & 0b0000_0001 != 0);
+        instruction.cycles
     }
 
-    fn atx(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode) & self.accumulator.get();
+    fn atx(&mut self, instruction: &Instruction) -> u8 {
+        let (_, mut value) = self.get_value(&instruction.mode);
+        value &= self.accumulator.get();
         self.register_x.set(value);
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn axa(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn axa(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         self.bus.write(
             address,
             self.register_x.get() & self.accumulator.get() & address.to_be_bytes()[0],
         );
+        instruction.cycles
     }
 
-    fn axs(&mut self, addressing_mode: &AddressingMode) {
-        let value = (self.accumulator.get() & self.register_x.get())
-            .wrapping_sub(self.get_value(addressing_mode));
+    fn axs(&mut self, instruction: &Instruction) -> u8 {
+        let (_, mut value) = self.get_value(&instruction.mode);
+        value = (self.accumulator.get() & self.register_x.get()).wrapping_sub(value);
         self.register_x.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn dcp(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn dcp(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
 
@@ -632,39 +718,45 @@ impl CPU {
             .set_carry_flag_to(self.accumulator.get() >= value);
         self.status.set_zero_flag(result);
         self.status.set_negative_flag(result);
+
+        instruction.cycles
     }
 
-    fn dop(&mut self) {
+    fn dop(&mut self, instruction: &Instruction) -> u8 {
         self.program_counter.inc();
+        instruction.cycles
     }
 
-    fn isb(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn isb(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.adc_operation(!value);
+        instruction.cycles
     }
 
-    fn lar(&mut self, addressing_mode: &AddressingMode) -> Result<(), StackError> {
-        let value = self.get_value(addressing_mode) & self.stack.get_pointer();
+    fn lar(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+        let (page_crossed, mut value) = self.get_value(&instruction.mode);
+        value &= self.stack.get_pointer();
         self.register_x.set(value);
         self.accumulator.set(value);
         self.stack.set_pointer(value)?;
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
-        Ok(())
+        Ok(instruction.cycles + page_crossed as u8)
     }
 
-    fn lax(&mut self, addressing_mode: &AddressingMode) {
-        let value = self.get_value(addressing_mode);
+    fn lax(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, value) = self.get_value(&instruction.mode);
         self.register_x.set(value);
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn rla(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn rla(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let mut value: u8 = self.bus.read(address);
         let carry_flag = self.status.get_carry_flag();
 
@@ -676,20 +768,22 @@ impl CPU {
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn rra(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn rra(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let mut value: u8 = self.bus.read(address);
         let set_carry_flag = value & 0b0000_0001 != 0;
         value = (value >> 1).wrapping_add(self.status.get_carry_flag() << 7);
         self.status.set_carry_flag_to(set_carry_flag);
         self.bus.write(address, value);
         self.adc_operation(value);
+        instruction.cycles
     }
 
-    fn slo(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn slo(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let mut value: u8 = self.bus.read(address);
 
         self.status.set_carry_flag_to(value & 0b1000_0000 != 0);
@@ -700,10 +794,11 @@ impl CPU {
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn sre(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn sre(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let mut value: u8 = self.bus.read(address);
 
         self.status.set_carry_flag_to(value & 0b0000_0001 != 0);
@@ -714,31 +809,35 @@ impl CPU {
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
+        instruction.cycles
     }
 
-    fn sxa(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn sxa(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let result = (self.register_x.get() & address.to_be_bytes()[0]).wrapping_add(1);
         self.bus.write(address, result);
+        instruction.cycles
     }
 
-    fn sya(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.read_operand_address(addressing_mode);
+    fn sya(&mut self, instruction: &Instruction) -> u8 {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let result = (self.register_y.get() & address.to_be_bytes()[0]).wrapping_add(1);
         self.bus.write(address, result);
+        instruction.cycles
     }
 
-    fn top(&mut self) {
-        self.program_counter.add(2);
+    fn top(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, _) = self.read_operand_address(&instruction.mode);
+        instruction.cycles + page_crossed as u8
     }
 
-    fn xas(&mut self, addressing_mode: &AddressingMode) -> Result<(), StackError> {
-        let address = self.read_operand_address(addressing_mode);
+    fn xas(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+        let (_, address) = self.read_operand_address(&instruction.mode);
         let result = self.register_x.get() & self.accumulator.get();
         self.stack.set_pointer(result)?;
         self.bus
             .write(address, (result & address.to_be_bytes()[0]).wrapping_add(1));
-        Ok(())
+        Ok(instruction.cycles)
     }
 
     fn next_instruction(&mut self) -> Result<&'static Instruction, UnknownOpCode> {
@@ -747,32 +846,53 @@ impl CPU {
         OPCODES.get(&opcode).ok_or(UnknownOpCode(opcode))
     }
 
-    fn read_operand_address(&mut self, addressing_mode: &AddressingMode) -> u16 {
-        let address = self.get_operand_address(addressing_mode, self.program_counter.get());
+    fn read_operand_address(&mut self, addressing_mode: &AddressingMode) -> (PageCrossed, u16) {
+        let result = self.get_operand_address(addressing_mode, self.program_counter.get());
         self.program_counter
             .add(addressing_mode.operand_bytes() as u16);
-        address
+        result
     }
 
-    fn get_operand_address(&mut self, addressing_mode: &AddressingMode, address: u16) -> u16 {
+    fn get_operand_address(
+        &mut self,
+        addressing_mode: &AddressingMode,
+        address: u16,
+    ) -> (PageCrossed, u16) {
         match addressing_mode {
-            AddressingMode::Absolute => self.bus.read(address),
-            AddressingMode::AbsoluteX => IOOperation::<u16>::read(&mut self.bus, address)
-                .wrapping_add(self.register_x.get() as u16),
-            AddressingMode::AbsoluteY => IOOperation::<u16>::read(&mut self.bus, address)
-                .wrapping_add(self.register_y.get() as u16),
-            AddressingMode::Immediate | AddressingMode::Relative => address,
+            AddressingMode::Absolute => (false, self.bus.read(address)),
+            AddressingMode::AbsoluteX => {
+                let absolute_address: u16 = self.bus.read(address);
+                let absolute_address_x =
+                    absolute_address.wrapping_add(self.register_x.get() as u16);
+                (
+                    (absolute_address >> 8) != (absolute_address_x >> 8),
+                    absolute_address_x,
+                )
+            }
+            AddressingMode::AbsoluteY => {
+                let absolute_address: u16 = self.bus.read(address);
+                let absolute_address_y =
+                    absolute_address.wrapping_add(self.register_y.get() as u16);
+                (
+                    (absolute_address >> 8) != (absolute_address_y >> 8),
+                    absolute_address_y,
+                )
+            }
+            AddressingMode::Immediate | AddressingMode::Relative => (false, address),
             AddressingMode::IndexedIndirectX => {
                 let indirect_address: u8 = IOOperation::<u8>::read(&mut self.bus, address)
                     .wrapping_add(self.register_x.get());
                 // TODO: Maybe it is better to move this logic into the bus
                 if (indirect_address & 0xFF) == 0 {
-                    self.bus.read(indirect_address as u16)
+                    (false, self.bus.read(indirect_address as u16))
                 } else {
-                    u16::from_le_bytes([
-                        self.bus.read(indirect_address as u16),
-                        self.bus.read(indirect_address.wrapping_add(1) as u16),
-                    ])
+                    (
+                        false,
+                        u16::from_le_bytes([
+                            self.bus.read(indirect_address as u16),
+                            self.bus.read(indirect_address.wrapping_add(1) as u16),
+                        ]),
+                    )
                 }
             }
             AddressingMode::Indirect => {
@@ -785,15 +905,18 @@ impl CPU {
                 // a page boundary. This code fixes it.
                 // Details: https://www.nesdev.org/obelisk-6502-guide/reference.html#JMP
                 if (indirect_address_suffix & 0xFF) == 0 {
-                    self.bus.read(indirect_address)
+                    (false, self.bus.read(indirect_address))
                 } else {
-                    u16::from_le_bytes([
-                        self.bus.read(indirect_address),
-                        self.bus.read(u16::from_be_bytes([
-                            (indirect_address >> 8) as u8,
-                            indirect_address_suffix.wrapping_add(1),
-                        ])),
-                    ])
+                    (
+                        false,
+                        u16::from_le_bytes([
+                            self.bus.read(indirect_address),
+                            self.bus.read(u16::from_be_bytes([
+                                (indirect_address >> 8) as u8,
+                                indirect_address_suffix.wrapping_add(1),
+                            ])),
+                        ]),
+                    )
                 }
             }
             AddressingMode::IndirectIndexedY => {
@@ -807,15 +930,25 @@ impl CPU {
                         self.bus.read(indirect_address.wrapping_add(1) as u16),
                     ])
                 };
-                real_address.wrapping_add(self.register_y.get() as u16)
+                (
+                    false,
+                    real_address.wrapping_add(self.register_y.get() as u16),
+                )
             }
-            AddressingMode::ZeroPage => IOOperation::<u8>::read(&mut self.bus, address) as u16,
-            AddressingMode::ZeroPageX => IOOperation::<u8>::read(&mut self.bus, address)
-                .wrapping_add(self.register_x.get())
-                as u16,
-            AddressingMode::ZeroPageY => IOOperation::<u8>::read(&mut self.bus, address)
-                .wrapping_add(self.register_y.get())
-                as u16,
+            AddressingMode::ZeroPage => (
+                false,
+                IOOperation::<u8>::read(&mut self.bus, address) as u16,
+            ),
+            AddressingMode::ZeroPageX => (
+                false,
+                IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(self.register_x.get())
+                    as u16,
+            ),
+            AddressingMode::ZeroPageY => (
+                false,
+                IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(self.register_y.get())
+                    as u16,
+            ),
             // TODO: Add error instead of panic
             AddressingMode::Accumulator | AddressingMode::Implied => {
                 panic!("Mode {addressing_mode:?} can't have address")
@@ -823,9 +956,9 @@ impl CPU {
         }
     }
 
-    fn get_value(&mut self, addressing_mode: &AddressingMode) -> u8 {
-        let address = self.read_operand_address(addressing_mode);
-        self.bus.read(address)
+    fn get_value(&mut self, addressing_mode: &AddressingMode) -> (PageCrossed, u8) {
+        let (page_crossed, address) = self.read_operand_address(addressing_mode);
+        (page_crossed, self.bus.read(address))
     }
 }
 
@@ -835,6 +968,8 @@ mod tests {
     use crate::rom::rom::Rom;
     use std::fs::read_to_string;
 
+    // Start execution at $C000 and compare execution with a known
+    // good log - https://www.qmtpro.com/~nes/misc/nestest.log
     #[test]
     fn test_nestest_cpu_instructions() {
         let logs_file = read_to_string("./ines/tests/nestest.log").unwrap();
@@ -875,7 +1010,7 @@ mod tests {
             | AddressingMode::Implied
             | AddressingMode::Relative => (0, 0),
             _ => {
-                let addr = cpu.get_operand_address(&opcode.mode, program_counter + 1);
+                let (_, addr) = cpu.get_operand_address(&opcode.mode, program_counter + 1);
                 let addr_value: u8 = cpu.bus.read(addr);
                 (addr, addr_value)
             }

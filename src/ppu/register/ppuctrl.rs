@@ -1,7 +1,7 @@
 use bitflags::{Flags, bitflags};
 
 // PPUCTRL - Miscellaneous settings ($2000 write)
-// https://www.nesdev.org/wiki/PPU_registers#PPUCTRL_-_Miscellaneous_settings_($2000_write)
+// https://www.nesdev.org/wiki/PPU_registers#PPUCTRL
 //
 // 7654 3210 bit
 // ---- ----
@@ -46,5 +46,9 @@ impl PPUCTRL {
 
     pub fn write(&mut self, value: u8) {
         *self = PPUCTRL::from_bits_truncate(value);
+    }
+
+    pub fn is_vblank_nmi_set(&self) -> bool {
+        self.contains(PPUCTRL::NMI_ENABLE)
     }
 }

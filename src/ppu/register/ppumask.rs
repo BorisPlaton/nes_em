@@ -3,7 +3,7 @@ use bitflags::bitflags;
 // PPUMASK - Rendering settings ($2001 write)
 // https://www.nesdev.org/wiki/PPU_registers#PPUMASK
 //
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // BGRs bMmG
 // |||| ||||

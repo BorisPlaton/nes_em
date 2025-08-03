@@ -2,6 +2,8 @@ use crate::cpu::bus::{CPUBus, IOOperation};
 use crate::cpu::error::StackError;
 use crate::cpu::register::register::Register;
 
+const INITIAL_STACK_POINTER: u16 = 0x01FD;
+
 pub struct Stack {
     stack_pointer: Register<u16>,
 }
@@ -9,12 +11,16 @@ pub struct Stack {
 impl Stack {
     pub fn new() -> Stack {
         Stack {
-            stack_pointer: Register::new(0x01FD),
+            stack_pointer: Register::new(INITIAL_STACK_POINTER),
         }
     }
 
     pub fn get_pointer(&self) -> u8 {
         self.stack_pointer.get() as u8
+    }
+
+    pub fn reset(&mut self) {
+        self.stack_pointer.set(INITIAL_STACK_POINTER);
     }
 
     pub fn set_pointer(&mut self, value: u8) -> Result<(), StackError> {
@@ -36,7 +42,7 @@ impl Stack {
     }
 
     pub fn pull(&mut self, bus: &mut CPUBus) -> Result<u8, StackError> {
-        if self.stack_pointer.get() == 0x01FF {
+        if self.stack_pointer.get() == INITIAL_STACK_POINTER {
             return Err(StackError::Underflow);
         }
         Ok(bus.read(self.stack_pointer.inc()))

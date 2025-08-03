@@ -3,7 +3,7 @@ use bitflags::bitflags;
 // PPUSTATUS - Rendering events ($2002 read)
 // https://www.nesdev.org/wiki/PPU_registers#PPUSTATUS
 //
-// 7  bit  0
+// 7654 3210 bit
 // ---- ----
 // VSOx xxxx
 // |||| ||||
@@ -27,5 +27,9 @@ impl PPUSTATUS {
     pub fn read(&self, register_w: &mut bool) -> u8 {
         *register_w = true;
         self.bits()
+    }
+
+    pub fn set_vblank_flag_to(&mut self, activate: bool) {
+        self.set(PPUSTATUS::VBLANK_FLAG, activate);
     }
 }

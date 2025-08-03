@@ -1,5 +1,5 @@
 // PPUDATA - VRAM data ($2007 read/write)
-// https://www.nesdev.org/wiki/PPU_registers#PPUDATA_-_VRAM_data_($2007_read/write)
+// https://www.nesdev.org/wiki/PPU_registers#PPUDATA
 //
 // 7654 3210 bit
 // ---- ----
