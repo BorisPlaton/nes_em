@@ -1,4 +1,4 @@
-use nes_em::cpu::bus::{CPUBus, IOOperation};
+use nes_em::cpu::bus::{CPUBus, CPUBusOperation};
 use nes_em::cpu::cpu::CPU;
 use nes_em::rom::rom::Rom;
 use rand::Rng;
@@ -30,7 +30,7 @@ fn main() {
     let rom = Rom::new(&bytes).unwrap();
     let bus = CPUBus::new(rom);
     let mut cpu = CPU::new(bus);
-    cpu.reset();
+    cpu.reset_interrupt();
     let mut screen_state = [0u8; 32 * 3 * 32];
     let mut rng = rand::rng();
 

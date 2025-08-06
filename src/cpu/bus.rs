@@ -28,7 +28,7 @@ pub struct CPUBus {
     cycles: usize,
 }
 
-pub trait IOOperation<T> {
+pub trait CPUBusOperation<T> {
     fn read(&mut self, address: u16) -> T;
 
     fn write(&mut self, address: u16, value: T);
@@ -48,9 +48,13 @@ impl CPUBus {
         self.cycles += cycles as usize;
         self.ppu.tick(cycles * 3);
     }
+
+    pub fn poll_nmi_interrupt(&self) -> bool {
+        self.ppu.poll_nmi_interrupt()
+    }
 }
 
-impl IOOperation<u8> for CPUBus {
+impl CPUBusOperation<u8> for CPUBus {
     fn read(&mut self, mut address: u16) -> u8 {
         match address {
             CPU_RAM_START..=CPU_RAM_END => self.cpu_ram[(address & CPU_MIRRORING) as usize],
@@ -100,7 +104,7 @@ impl IOOperation<u8> for CPUBus {
     }
 }
 
-impl IOOperation<u16> for CPUBus {
+impl CPUBusOperation<u16> for CPUBus {
     fn read(&mut self, mut address: u16) -> u16 {
         match address {
             CPU_RAM_START..=CPU_RAM_END => {
@@ -108,7 +112,7 @@ impl IOOperation<u16> for CPUBus {
                 // TODO: Here probably must be an error. Reading beyond 2048
                 u16::from_le_bytes([
                     self.cpu_ram[address as usize],
-                    self.cpu_ram[(address + 1) as usize],
+                    self.cpu_ram[address.wrapping_add(1) as usize],
                 ])
             }
             PRG_ROM_START..=PRG_ROM_END => {
@@ -119,7 +123,7 @@ impl IOOperation<u16> for CPUBus {
                 // TODO: Here probably must be an error. Reading beyond 0xFFFF
                 u16::from_le_bytes([
                     self.prg_rom[address as usize],
-                    self.prg_rom[(address + 1) as usize],
+                    self.prg_rom[address.wrapping_add(1) as usize],
                 ])
             }
             _ => panic!("Invalid address"),
@@ -132,7 +136,7 @@ impl IOOperation<u16> for CPUBus {
             CPU_RAM_START..=CPU_RAM_END => {
                 address &= CPU_MIRRORING;
                 self.cpu_ram[address as usize] = value_le_bytes[0];
-                self.cpu_ram[(address + 1) as usize] = value_le_bytes[1];
+                self.cpu_ram[address.wrapping_add(1) as usize] = value_le_bytes[1];
             }
             PRG_ROM_START..=PRG_ROM_END => panic!("Write to PRG ROM is restricted"),
             _ => panic!("Invalid address"),

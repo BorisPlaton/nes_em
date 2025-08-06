@@ -47,8 +47,4 @@ impl PPUCTRL {
     pub fn write(&mut self, value: u8) {
         *self = PPUCTRL::from_bits_truncate(value);
     }
-
-    pub fn is_vblank_nmi_set(&self) -> bool {
-        self.contains(PPUCTRL::NMI_ENABLE)
-    }
 }

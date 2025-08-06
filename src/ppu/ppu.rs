@@ -47,6 +47,7 @@ pub struct PPU {
 
     scanline: u16,
     cycles: usize,
+    nmi_interrupt: bool,
 }
 
 impl PPU {
@@ -72,6 +73,7 @@ impl PPU {
 
             scanline: 0,
             cycles: 0,
+            nmi_interrupt: false,
         }
     }
 
@@ -86,9 +88,9 @@ impl PPU {
         self.scanline += 1;
 
         // https://www.nesdev.org/wiki/PPU_rendering#Vertical_blanking_lines_(241-260)
-        if (self.scanline == 241) & (self.ppuctrl.is_vblank_nmi_set()) {
+        if (self.scanline == 241) & (self.ppuctrl.contains(PPUCTRL::NMI_ENABLE)) {
             self.ppustatus.set_vblank_flag_to(true);
-            todo!("Should trigger NMI interrupt")
+            self.nmi_interrupt = true;
         }
 
         if self.scanline >= 262 {
@@ -100,8 +102,16 @@ impl PPU {
         false
     }
 
+    pub fn poll_nmi_interrupt(&self) -> bool {
+        self.nmi_interrupt
+    }
+
     pub fn write_ppuctrl(&mut self, value: u8) {
+        let nmi_disabled = !self.ppuctrl.contains(PPUCTRL::NMI_ENABLE);
         self.ppuctrl.write(value);
+        self.nmi_interrupt = nmi_disabled
+            && self.ppuctrl.contains(PPUCTRL::NMI_ENABLE)
+            && self.ppustatus.contains(PPUSTATUS::VBLANK_FLAG);
     }
 
     pub fn write_ppumask(&mut self, value: u8) {

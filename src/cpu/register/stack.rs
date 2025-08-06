@@ -1,4 +1,4 @@
-use crate::cpu::bus::{CPUBus, IOOperation};
+use crate::cpu::bus::{CPUBus, CPUBusOperation};
 use crate::cpu::error::StackError;
 use crate::cpu::register::register::Register;
 
@@ -30,8 +30,16 @@ impl Stack {
         self.stack_pointer.set(0x0100 + value as u16);
         Ok(())
     }
+}
 
-    pub fn push(&mut self, value: u8, bus: &mut CPUBus) -> Result<(), StackError> {
+pub trait StackOperation<T> {
+    fn push(&mut self, value: T, bus: &mut CPUBus) -> Result<(), StackError>;
+
+    fn pull(&mut self, bus: &mut CPUBus) -> Result<T, StackError>;
+}
+
+impl StackOperation<u8> for Stack {
+    fn push(&mut self, value: u8, bus: &mut CPUBus) -> Result<(), StackError> {
         let address = self.stack_pointer.get();
         if address < 0x0100 {
             return Err(StackError::Overflow);
@@ -41,10 +49,25 @@ impl Stack {
         Ok(())
     }
 
-    pub fn pull(&mut self, bus: &mut CPUBus) -> Result<u8, StackError> {
+    fn pull(&mut self, bus: &mut CPUBus) -> Result<u8, StackError> {
         if self.stack_pointer.get() == INITIAL_STACK_POINTER {
             return Err(StackError::Underflow);
         }
         Ok(bus.read(self.stack_pointer.inc()))
+    }
+}
+
+impl StackOperation<u16> for Stack {
+    fn push(&mut self, value: u16, bus: &mut CPUBus) -> Result<(), StackError> {
+        let value_bytes: [u8; 2] = value.to_be_bytes();
+        StackOperation::<u8>::push(self, value_bytes[0], bus)?;
+        StackOperation::<u8>::push(self, value_bytes[1], bus)?;
+        Ok(())
+    }
+
+    fn pull(&mut self, bus: &mut CPUBus) -> Result<u16, StackError> {
+        let lo_byte = StackOperation::<u8>::pull(self, bus)?;
+        let hi_byte = StackOperation::<u8>::pull(self, bus)?;
+        Ok(u16::from_le_bytes([lo_byte, hi_byte]))
     }
 }

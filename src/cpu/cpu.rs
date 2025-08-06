@@ -1,14 +1,18 @@
-use crate::cpu::bus::{CPUBus, IOOperation};
+use crate::cpu::bus::{CPUBus, CPUBusOperation};
 use crate::cpu::error::{StackError, UnknownOpCode};
 use crate::cpu::opcode::OPCODES;
 use crate::cpu::opcode::{AddressingMode, Instruction, OpCode};
 use crate::cpu::register::counter::ProgramCounter;
 use crate::cpu::register::register::Register;
-use crate::cpu::register::stack::Stack;
+use crate::cpu::register::stack::{Stack, StackOperation};
 use crate::cpu::register::status::Status;
 use std::error::Error;
 
 type PageCrossed = bool;
+
+const NMI_INTERRUPT_VECTOR: u16 = 0xFFFA;
+const RESET_INTERRUPT_VECTOR: u16 = 0xFFFC;
+const IRQ_INTERRUPT_VECTOR: u16 = 0xFFFE;
 
 pub struct CPU {
     accumulator: Register<u8>,
@@ -33,20 +37,15 @@ impl CPU {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.program_counter.set(self.bus.read(0xFFFC));
-        self.accumulator.set(0);
-        self.register_x.set(0);
-        self.register_y.set(0);
-        self.status.reset();
-        self.stack.reset();
-    }
-
     pub fn run<F>(&mut self, mut callback: F) -> Result<(), Box<dyn Error>>
     where
         F: FnMut(&mut CPU),
     {
         loop {
+            if self.bus.poll_nmi_interrupt() {
+                self.nmi_interrupt();
+            }
+
             callback(self);
             let instruction = self.next_instruction()?;
             let passed_cycles = match instruction.opcode {
@@ -60,7 +59,7 @@ impl CPU {
                 OpCode::BMI => self.bmi(&instruction),
                 OpCode::BNE => self.bne(&instruction),
                 OpCode::BPL => self.bpl(&instruction),
-                OpCode::BRK => return Ok(()),
+                OpCode::BRK => self.brk(&instruction)?,
                 OpCode::BVC => self.bvc(&instruction),
                 OpCode::BVS => self.bvs(&instruction),
                 OpCode::CLC => self.clc(&instruction),
@@ -254,6 +253,15 @@ impl CPU {
         }
     }
 
+    fn brk(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+        self.stack.push(self.program_counter.get(), &mut self.bus)?;
+        self.stack.push(self.status.get(), &mut self.bus)?;
+        self.program_counter
+            .set(self.bus.read(IRQ_INTERRUPT_VECTOR));
+        self.status.set_interrupt_disable_flag_to(true);
+        Ok(instruction.cycles)
+    }
+
     fn bvc(&mut self, instruction: &Instruction) -> u8 {
         let (page_crossed, offset) = self.get_value(&instruction.mode);
         if !self.status.is_overflow_flag_set() {
@@ -326,7 +334,7 @@ impl CPU {
 
     fn dec(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
+        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -358,7 +366,7 @@ impl CPU {
 
     fn inc(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
+        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -387,10 +395,8 @@ impl CPU {
 
     fn jsr(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let current_address_bytes: [u8; 2] =
-            self.program_counter.get().wrapping_sub(1).to_be_bytes();
-        self.stack.push(current_address_bytes[0], &mut self.bus)?;
-        self.stack.push(current_address_bytes[1], &mut self.bus)?;
+        self.stack
+            .push(self.program_counter.get().wrapping_sub(1), &mut self.bus)?;
         self.program_counter.set(address);
         Ok(instruction.cycles)
     }
@@ -474,8 +480,8 @@ impl CPU {
     }
 
     fn plp(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let value = self.stack.pull(&mut self.bus)? & 0xEF | 0x20;
-        self.status.set(value);
+        let value: u8 = self.stack.pull(&mut self.bus)?;
+        self.status.set(value & 0xEF | 0x20);
         Ok(instruction.cycles)
     }
 
@@ -527,19 +533,15 @@ impl CPU {
 
     fn rti(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
         let status = self.stack.pull(&mut self.bus)?;
-        let program_counter_lo = self.stack.pull(&mut self.bus)?;
-        let program_counter_hi = self.stack.pull(&mut self.bus)?;
+        let program_counter = self.stack.pull(&mut self.bus)?;
         self.status.set(status);
-        self.program_counter
-            .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]));
+        self.program_counter.set(program_counter);
         Ok(instruction.cycles)
     }
 
     fn rts(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let program_counter_lo = self.stack.pull(&mut self.bus)?;
-        let program_counter_hi = self.stack.pull(&mut self.bus)?;
-        self.program_counter
-            .set(u16::from_le_bytes([program_counter_lo, program_counter_hi]).wrapping_add(1));
+        let program_counter: u16 = self.stack.pull(&mut self.bus)?;
+        self.program_counter.set(program_counter.wrapping_add(1));
         Ok(instruction.cycles)
     }
 
@@ -710,7 +712,7 @@ impl CPU {
 
     fn dcp(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
+        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
 
         let result = self.accumulator.sub(value);
@@ -729,7 +731,7 @@ impl CPU {
 
     fn isb(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
+        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.adc_operation(!value);
         instruction.cycles
@@ -846,6 +848,29 @@ impl CPU {
         OPCODES.get(&opcode).ok_or(UnknownOpCode(opcode))
     }
 
+    fn nmi_interrupt(&mut self) -> Result<(), StackError> {
+        self.stack.push(self.program_counter.get(), &mut self.bus)?;
+        self.stack.push(self.status.get(), &mut self.bus)?;
+        self.status.set_interrupt_disable_flag_to(false);
+        self.program_counter
+            .set(self.bus.read(NMI_INTERRUPT_VECTOR));
+        Ok(())
+    }
+
+    fn irq_interrupt(&mut self) -> Result<(), StackError> {
+        todo!("implement IRQ interrupt")
+    }
+
+    pub fn reset_interrupt(&mut self) {
+        self.program_counter
+            .set(self.bus.read(RESET_INTERRUPT_VECTOR));
+        self.accumulator.set(0);
+        self.register_x.set(0);
+        self.register_y.set(0);
+        self.status.reset();
+        self.stack.reset();
+    }
+
     fn read_operand_address(&mut self, addressing_mode: &AddressingMode) -> (PageCrossed, u16) {
         let result = self.get_operand_address(addressing_mode, self.program_counter.get());
         self.program_counter
@@ -880,7 +905,7 @@ impl CPU {
             }
             AddressingMode::Immediate | AddressingMode::Relative => (false, address),
             AddressingMode::IndexedIndirectX => {
-                let indirect_address: u8 = IOOperation::<u8>::read(&mut self.bus, address)
+                let indirect_address: u8 = CPUBusOperation::<u8>::read(&mut self.bus, address)
                     .wrapping_add(self.register_x.get());
                 // TODO: Maybe it is better to move this logic into the bus
                 if (indirect_address & 0xFF) == 0 {
@@ -937,17 +962,17 @@ impl CPU {
             }
             AddressingMode::ZeroPage => (
                 false,
-                IOOperation::<u8>::read(&mut self.bus, address) as u16,
+                CPUBusOperation::<u8>::read(&mut self.bus, address) as u16,
             ),
             AddressingMode::ZeroPageX => (
                 false,
-                IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(self.register_x.get())
-                    as u16,
+                CPUBusOperation::<u8>::read(&mut self.bus, address)
+                    .wrapping_add(self.register_x.get()) as u16,
             ),
             AddressingMode::ZeroPageY => (
                 false,
-                IOOperation::<u8>::read(&mut self.bus, address).wrapping_add(self.register_y.get())
-                    as u16,
+                CPUBusOperation::<u8>::read(&mut self.bus, address)
+                    .wrapping_add(self.register_y.get()) as u16,
             ),
             // TODO: Add error instead of panic
             AddressingMode::Accumulator | AddressingMode::Implied => {
@@ -990,7 +1015,7 @@ mod tests {
         let rom = Rom::new(&program).unwrap();
         let bus = CPUBus::new(rom);
         let mut cpu = CPU::new(bus);
-        cpu.reset();
+        cpu.reset_interrupt();
         cpu
     }
 

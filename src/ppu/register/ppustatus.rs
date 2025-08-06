@@ -32,4 +32,8 @@ impl PPUSTATUS {
     pub fn set_vblank_flag_to(&mut self, activate: bool) {
         self.set(PPUSTATUS::VBLANK_FLAG, activate);
     }
+
+    pub fn is_vblank_flag_set(&self) -> bool {
+        self.contains(PPUSTATUS::VBLANK_FLAG)
+    }
 }

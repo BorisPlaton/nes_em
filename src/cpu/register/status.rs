@@ -2,6 +2,8 @@ use crate::cpu::register::register::Register;
 
 const STATUS_INITIAL_STATE: u8 = 0b0010_0100;
 
+// TODO: Use bitflags! macro
+#[derive(Clone)]
 pub struct Status {
     state: Register<u8>,
 }

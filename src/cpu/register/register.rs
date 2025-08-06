@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Register<T>
 where
     T: Copy,
