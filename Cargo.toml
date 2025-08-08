@@ -1,10 +1,5 @@
-[package]
-name = "nes_em"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-lazy_static = "1.5.0"
-sdl2 = "0.38.0"
-rand = "0.9.1"
-bitflags = "2.9.1"
+[workspace]
+members = [
+    "nes",
+    "cli"
+]

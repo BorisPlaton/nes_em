@@ -1,6 +1,6 @@
-use nes_em::cpu::bus::{CPUBus, CPUBusOperation};
-use nes_em::cpu::cpu::CPU;
-use nes_em::rom::rom::Rom;
+use nes::cpu::bus::{CPUBus, CPUBusOperation};
+use nes::cpu::cpu::CPU;
+use nes::rom::rom::Rom;
 use rand::Rng;
 use sdl2::EventPump;
 use sdl2::event::Event;
@@ -26,7 +26,7 @@ fn main() {
         .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
         .unwrap();
 
-    let bytes: Vec<u8> = std::fs::read("./ines/snake.nes").unwrap();
+    let bytes: Vec<u8> = std::fs::read("./roms/snake.nes").unwrap();
     let rom = Rom::new(&bytes).unwrap();
     let bus = CPUBus::new(rom);
     let mut cpu = CPU::new(bus);

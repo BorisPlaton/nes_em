@@ -997,9 +997,9 @@ mod tests {
     // good log - https://www.qmtpro.com/~nes/misc/nestest.log
     #[test]
     fn test_nestest_cpu_instructions() {
-        let logs_file = read_to_string("./ines/tests/nestest.log").unwrap();
+        let logs_file = read_to_string("../roms/tests/nestest.log").unwrap();
         let mut logs = logs_file.lines().map(|l| l.to_string());
-        let rom_content = std::fs::read("./ines/tests/nestest.nes").unwrap();
+        let rom_content = std::fs::read("../roms/tests/nestest.nes").unwrap();
         let mut cpu = setup_cpu_with_program(rom_content);
         cpu.program_counter.set(0xC000);
 

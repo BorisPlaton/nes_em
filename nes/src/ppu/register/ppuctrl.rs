@@ -1,4 +1,4 @@
-use bitflags::{Flags, bitflags};
+use bitflags::bitflags;
 
 // PPUCTRL - Miscellaneous settings ($2000 write)
 // https://www.nesdev.org/wiki/PPU_registers#PPUCTRL
