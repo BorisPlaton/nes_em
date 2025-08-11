@@ -58,7 +58,8 @@ impl Register<u16> {
         self.value.wrapping_add(value)
     }
 
-    pub fn add_signed(&mut self, value: i16) {
+    pub fn add_signed(&mut self, value: i16) -> u16 {
         self.value = self.value.wrapping_add_signed(value);
+        self.value
     }
 }

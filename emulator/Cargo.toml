@@ -1,9 +1,8 @@
 [package]
-name = "cli"
+name = "emulator"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 nes = { path = "../nes" }
-rand = "0.9.1"
 sdl2 = "0.38.0"

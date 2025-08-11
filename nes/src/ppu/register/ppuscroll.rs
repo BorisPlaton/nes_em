@@ -16,20 +16,27 @@
 // ++++-++++- Y scroll bits 7-0 (bit 8 in PPUCTRL bit 1)
 pub struct PPUSCROLL {
     data: (u8, u8),
+    latch: bool,
 }
 
 impl PPUSCROLL {
     pub fn new() -> PPUSCROLL {
-        PPUSCROLL { data: (0, 0) }
+        PPUSCROLL {
+            data: (0, 0),
+            latch: false,
+        }
     }
 
-    pub fn write(&mut self, value: u8, register_w: &mut bool) {
-        let register_w_value = *register_w;
-        if register_w_value {
+    pub fn write(&mut self, value: u8) {
+        self.latch = !self.latch;
+        if self.latch {
             self.data.0 = value;
         } else {
             self.data.1 = value
         }
-        *register_w = !register_w_value;
+    }
+
+    pub fn reset_latch(&mut self) {
+        self.latch = false;
     }
 }

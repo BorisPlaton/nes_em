@@ -1,4 +1,10 @@
 .idea/
 target/
+roms/*
+!roms/tests/*
 
 .DS_Store
+compare_log.txt
+compare_log_res.txt
+log.txt
+log_res.txt

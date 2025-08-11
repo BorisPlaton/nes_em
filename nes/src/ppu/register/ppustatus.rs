@@ -14,7 +14,7 @@ use bitflags::bitflags;
 bitflags! {
     pub struct PPUSTATUS: u8 {
         const SPRITE_OVERFLOW = 0b0010_0000;
-        const SPRITE_0_HIT_FLAG =  0b0100_0000;
+        const SPRITE_ZERO_HIT_FLAG =  0b0100_0000;
         const VBLANK_FLAG = 0b1000_0000;
     }
 }
@@ -24,8 +24,7 @@ impl PPUSTATUS {
         PPUSTATUS::from_bits_truncate(0b0)
     }
 
-    pub fn read(&self, register_w: &mut bool) -> u8 {
-        *register_w = true;
+    pub fn read(&self) -> u8 {
         self.bits()
     }
 
@@ -33,7 +32,7 @@ impl PPUSTATUS {
         self.set(PPUSTATUS::VBLANK_FLAG, activate);
     }
 
-    pub fn is_vblank_flag_set(&self) -> bool {
-        self.contains(PPUSTATUS::VBLANK_FLAG)
+    pub fn set_sprite_zero_hit_to(&mut self, activate: bool) {
+        self.set(PPUSTATUS::SPRITE_ZERO_HIT_FLAG, activate);
     }
 }

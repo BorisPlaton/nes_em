@@ -1,5 +1,7 @@
 use crate::cpu::register::register::Register;
 
+type PageCrossed = bool;
+
 pub struct ProgramCounter {
     register: Register<u16>,
 }
@@ -28,7 +30,9 @@ impl ProgramCounter {
         self.register.set(value);
     }
 
-    pub fn move_with_offset(&mut self, value: u8) {
-        self.register.add_signed(value as i8 as i16);
+    pub fn move_with_offset(&mut self, value: u8) -> PageCrossed {
+        let previous_val = self.register.get();
+        let current_value = self.register.add_signed(value as i8 as i16);
+        previous_val.to_be_bytes()[0] != current_value.to_be_bytes()[0]
     }
 }

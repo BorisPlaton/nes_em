@@ -2,10 +2,6 @@ use crate::ppu::mirroring::Mirroring;
 use crate::rom::control_bytes::{ControlBytes, NESFormat};
 use crate::rom::error::InvalidINESFile;
 
-pub const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
-const PRG_ROM_SIZE: usize = 16384;
-const CHRROM_SIZE: usize = 8192;
-
 pub struct Rom {
     pub prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
@@ -14,18 +10,22 @@ pub struct Rom {
 }
 
 impl Rom {
+    const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
+    const PRG_ROM_SIZE: usize = 16384;
+    const CHRROM_SIZE: usize = 8192;
+
     pub fn new(content: &[u8]) -> Result<Self, InvalidINESFile> {
         let nes_tag = content
             .get(0..4)
-            .ok_or(InvalidINESFile::IncorrectNESTag(&[]))?;
-        if nes_tag != NES_TAG {
-            return Err(InvalidINESFile::IncorrectNESTag(nes_tag));
+            .ok_or(InvalidINESFile::IncorrectNESTag(&[], Rom::NES_TAG))?;
+        if nes_tag != Rom::NES_TAG {
+            return Err(InvalidINESFile::IncorrectNESTag(nes_tag, Rom::NES_TAG));
         }
 
         let prg_rom_size =
-            *content.get(4).ok_or(InvalidINESFile::PRGROMSizeAbsent)? as usize * PRG_ROM_SIZE;
+            *content.get(4).ok_or(InvalidINESFile::PRGROMSizeAbsent)? as usize * Rom::PRG_ROM_SIZE;
         let chr_rom_size =
-            *content.get(5).ok_or(InvalidINESFile::CHRROMSizeAbsent)? as usize * CHRROM_SIZE;
+            *content.get(5).ok_or(InvalidINESFile::CHRROMSizeAbsent)? as usize * Rom::CHRROM_SIZE;
         let control_bytes = ControlBytes::new(
             *content.get(6).ok_or(InvalidINESFile::ControlByte1Absent)?,
             *content.get(7).ok_or(InvalidINESFile::ControlByte2Absent)?,

@@ -1,12 +1,11 @@
 use crate::cpu::bus::{CPUBus, CPUBusOperation};
-use crate::cpu::error::{StackError, UnknownOpCode};
+use crate::cpu::error::UnknownOpCode;
 use crate::cpu::opcode::OPCODES;
 use crate::cpu::opcode::{AddressingMode, Instruction, OpCode};
 use crate::cpu::register::counter::ProgramCounter;
 use crate::cpu::register::register::Register;
 use crate::cpu::register::stack::{Stack, StackOperation};
-use crate::cpu::register::status::Status;
-use std::error::Error;
+use crate::cpu::register::status::ProcessorStatus;
 
 type PageCrossed = bool;
 
@@ -14,30 +13,30 @@ const NMI_INTERRUPT_VECTOR: u16 = 0xFFFA;
 const RESET_INTERRUPT_VECTOR: u16 = 0xFFFC;
 const IRQ_INTERRUPT_VECTOR: u16 = 0xFFFE;
 
-pub struct CPU {
-    accumulator: Register<u8>,
-    register_x: Register<u8>,
-    register_y: Register<u8>,
-    program_counter: ProgramCounter,
-    status: Status,
-    pub bus: CPUBus,
-    stack: Stack,
+pub struct CPU<'bus> {
+    pub accumulator: Register<u8>,
+    pub register_x: Register<u8>,
+    pub register_y: Register<u8>,
+    pub program_counter: ProgramCounter,
+    pub status: ProcessorStatus,
+    pub bus: CPUBus<'bus>,
+    pub stack: Stack,
 }
 
-impl CPU {
-    pub fn new(bus: CPUBus) -> Self {
+impl<'bus> CPU<'bus> {
+    pub fn new(bus: CPUBus<'bus>) -> Self {
         CPU {
             accumulator: Register::new(0),
             register_x: Register::new(0),
             register_y: Register::new(0),
             program_counter: ProgramCounter::new(),
-            status: Status::new(),
+            status: ProcessorStatus::new(),
             stack: Stack::new(),
             bus,
         }
     }
 
-    pub fn run<F>(&mut self, mut callback: F) -> Result<(), Box<dyn Error>>
+    pub fn run<F>(&mut self, mut callback: F) -> Result<(), UnknownOpCode>
     where
         F: FnMut(&mut CPU),
     {
@@ -59,7 +58,7 @@ impl CPU {
                 OpCode::BMI => self.bmi(&instruction),
                 OpCode::BNE => self.bne(&instruction),
                 OpCode::BPL => self.bpl(&instruction),
-                OpCode::BRK => self.brk(&instruction)?,
+                OpCode::BRK => self.brk(&instruction),
                 OpCode::BVC => self.bvc(&instruction),
                 OpCode::BVS => self.bvs(&instruction),
                 OpCode::CLC => self.clc(&instruction),
@@ -77,21 +76,21 @@ impl CPU {
                 OpCode::INX => self.inx(&instruction),
                 OpCode::INY => self.iny(&instruction),
                 OpCode::JMP => self.jmp(&instruction),
-                OpCode::JSR => self.jsr(&instruction)?,
+                OpCode::JSR => self.jsr(&instruction),
                 OpCode::LDA => self.lda(&instruction),
                 OpCode::LDX => self.ldx(&instruction),
                 OpCode::LDY => self.ldy(&instruction),
                 OpCode::LSR => self.lsr(&instruction),
                 OpCode::NOP => self.nop(&instruction),
                 OpCode::ORA => self.ora(&instruction),
-                OpCode::PHA => self.pha(&instruction)?,
-                OpCode::PHP => self.php(&instruction)?,
-                OpCode::PLA => self.pla(&instruction)?,
-                OpCode::PLP => self.plp(&instruction)?,
+                OpCode::PHA => self.pha(&instruction),
+                OpCode::PHP => self.php(&instruction),
+                OpCode::PLA => self.pla(&instruction),
+                OpCode::PLP => self.plp(&instruction),
                 OpCode::ROL => self.rol(&instruction),
                 OpCode::ROR => self.ror(&instruction),
-                OpCode::RTI => self.rti(&instruction)?,
-                OpCode::RTS => self.rts(&instruction)?,
+                OpCode::RTI => self.rti(&instruction),
+                OpCode::RTS => self.rts(&instruction),
                 OpCode::SBC => self.sbc(&instruction),
                 OpCode::SEC => self.sec(&instruction),
                 OpCode::SED => self.sed(&instruction),
@@ -103,7 +102,7 @@ impl CPU {
                 OpCode::TAY => self.tay(&instruction),
                 OpCode::TSX => self.tsx(&instruction),
                 OpCode::TXA => self.txa(&instruction),
-                OpCode::TXS => self.txs(&instruction)?,
+                OpCode::TXS => self.txs(&instruction),
                 OpCode::TYA => self.tya(&instruction),
                 OpCode::AAC => self.aac(&instruction),
                 OpCode::SAX => self.sax(&instruction),
@@ -116,7 +115,7 @@ impl CPU {
                 OpCode::DOP => self.dop(&instruction),
                 OpCode::ISB => self.isb(&instruction),
                 OpCode::KIL => return Ok(()),
-                OpCode::LAR => self.lar(&instruction)?,
+                OpCode::LAR => self.lar(&instruction),
                 OpCode::LAX => self.lax(&instruction),
                 OpCode::RLA => self.rla(&instruction),
                 OpCode::RRA => self.rra(&instruction),
@@ -126,7 +125,7 @@ impl CPU {
                 OpCode::SYA => self.sya(&instruction),
                 OpCode::TOP => self.top(&instruction),
                 OpCode::XAA => panic!("XAA encountered. Exact behaviour is unknown."),
-                OpCode::XAS => self.xas(&instruction)?,
+                OpCode::XAS => self.xas(&instruction),
             };
             self.bus.tick(passed_cycles);
         }
@@ -186,9 +185,9 @@ impl CPU {
     }
 
     fn bcc(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if !self.status.is_carry_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -196,9 +195,9 @@ impl CPU {
     }
 
     fn bcs(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if self.status.is_carry_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -206,9 +205,9 @@ impl CPU {
     }
 
     fn beq(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if self.status.is_zero_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -224,9 +223,9 @@ impl CPU {
     }
 
     fn bmi(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if self.status.is_negative_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -234,9 +233,9 @@ impl CPU {
     }
 
     fn bne(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if !self.status.is_zero_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -244,28 +243,28 @@ impl CPU {
     }
 
     fn bpl(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if !self.status.is_negative_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
         }
     }
 
-    fn brk(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        self.stack.push(self.program_counter.get(), &mut self.bus)?;
-        self.stack.push(self.status.get(), &mut self.bus)?;
+    fn brk(&mut self, instruction: &Instruction) -> u8 {
+        self.stack.push(self.program_counter.get(), &mut self.bus);
+        self.stack.push(self.status.get(), &mut self.bus);
         self.program_counter
             .set(self.bus.read(IRQ_INTERRUPT_VECTOR));
         self.status.set_interrupt_disable_flag_to(true);
-        Ok(instruction.cycles)
+        instruction.cycles
     }
 
     fn bvc(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if !self.status.is_overflow_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -273,9 +272,9 @@ impl CPU {
     }
 
     fn bvs(&mut self, instruction: &Instruction) -> u8 {
-        let (page_crossed, offset) = self.get_value(&instruction.mode);
+        let (_, offset) = self.get_value(&instruction.mode);
         if self.status.is_overflow_flag_set() {
-            self.program_counter.move_with_offset(offset);
+            let page_crossed = self.program_counter.move_with_offset(offset);
             instruction.cycles + if page_crossed { 2 } else { 1 }
         } else {
             instruction.cycles
@@ -393,12 +392,12 @@ impl CPU {
         instruction.cycles
     }
 
-    fn jsr(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+    fn jsr(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
         self.stack
-            .push(self.program_counter.get().wrapping_sub(1), &mut self.bus)?;
+            .push(self.program_counter.get().wrapping_sub(1), &mut self.bus);
         self.program_counter.set(address);
-        Ok(instruction.cycles)
+        instruction.cycles
     }
 
     fn lda(&mut self, instruction: &Instruction) -> u8 {
@@ -448,7 +447,8 @@ impl CPU {
     }
 
     fn nop(&mut self, instruction: &Instruction) -> u8 {
-        instruction.cycles
+        let (page_crossed, _) = self.get_value(&instruction.mode);
+        instruction.cycles + page_crossed as u8
     }
 
     fn ora(&mut self, instruction: &Instruction) -> u8 {
@@ -460,29 +460,29 @@ impl CPU {
         instruction.cycles + page_crossed as u8
     }
 
-    fn pha(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        self.stack.push(self.accumulator.get(), &mut self.bus)?;
-        Ok(instruction.cycles)
+    fn pha(&mut self, instruction: &Instruction) -> u8 {
+        self.stack.push(self.accumulator.get(), &mut self.bus);
+        instruction.cycles
     }
 
-    fn php(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+    fn php(&mut self, instruction: &Instruction) -> u8 {
         let status = self.status.get() | 0b0001_0000;
-        self.stack.push(status, &mut self.bus)?;
-        Ok(instruction.cycles)
+        self.stack.push(status, &mut self.bus);
+        instruction.cycles
     }
 
-    fn pla(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let value = self.stack.pull(&mut self.bus)?;
+    fn pla(&mut self, instruction: &Instruction) -> u8 {
+        let value = self.stack.pull(&mut self.bus);
         self.accumulator.set(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
-        Ok(instruction.cycles)
+        instruction.cycles
     }
 
-    fn plp(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let value: u8 = self.stack.pull(&mut self.bus)?;
-        self.status.set(value & 0xEF | 0x20);
-        Ok(instruction.cycles)
+    fn plp(&mut self, instruction: &Instruction) -> u8 {
+        let value: u8 = self.stack.pull(&mut self.bus);
+        self.status.update(value);
+        instruction.cycles
     }
 
     fn rol(&mut self, instruction: &Instruction) -> u8 {
@@ -531,18 +531,18 @@ impl CPU {
         instruction.cycles
     }
 
-    fn rti(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let status = self.stack.pull(&mut self.bus)?;
-        let program_counter = self.stack.pull(&mut self.bus)?;
-        self.status.set(status);
+    fn rti(&mut self, instruction: &Instruction) -> u8 {
+        let status = self.stack.pull(&mut self.bus);
+        let program_counter = self.stack.pull(&mut self.bus);
+        self.status.update(status);
         self.program_counter.set(program_counter);
-        Ok(instruction.cycles)
+        instruction.cycles
     }
 
-    fn rts(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let program_counter: u16 = self.stack.pull(&mut self.bus)?;
+    fn rts(&mut self, instruction: &Instruction) -> u8 {
+        let program_counter: u16 = self.stack.pull(&mut self.bus);
         self.program_counter.set(program_counter.wrapping_add(1));
-        Ok(instruction.cycles)
+        instruction.cycles
     }
 
     fn sbc(&mut self, instruction: &Instruction) -> u8 {
@@ -612,10 +612,9 @@ impl CPU {
         instruction.cycles
     }
 
-    fn txs(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
-        let new_pointer = self.register_x.get();
-        self.stack.set_pointer(new_pointer)?;
-        Ok(instruction.cycles)
+    fn txs(&mut self, instruction: &Instruction) -> u8 {
+        self.stack.set_pointer(self.register_x.get());
+        instruction.cycles
     }
 
     fn tya(&mut self, instruction: &Instruction) -> u8 {
@@ -636,9 +635,9 @@ impl CPU {
     }
 
     fn sax(&mut self, instruction: &Instruction) -> u8 {
-        let value = self.register_x.get() & self.accumulator.get();
         let (_, address) = self.read_operand_address(&instruction.mode);
-        self.bus.write(address, value);
+        self.bus
+            .write(address, self.register_x.get() & self.accumulator.get());
         instruction.cycles
     }
 
@@ -725,8 +724,9 @@ impl CPU {
     }
 
     fn dop(&mut self, instruction: &Instruction) -> u8 {
+        let (page_crossed, _) = self.read_operand_address(&instruction.mode);
         self.program_counter.inc();
-        instruction.cycles
+        instruction.cycles + page_crossed as u8
     }
 
     fn isb(&mut self, instruction: &Instruction) -> u8 {
@@ -737,15 +737,15 @@ impl CPU {
         instruction.cycles
     }
 
-    fn lar(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+    fn lar(&mut self, instruction: &Instruction) -> u8 {
         let (page_crossed, mut value) = self.get_value(&instruction.mode);
         value &= self.stack.get_pointer();
         self.register_x.set(value);
         self.accumulator.set(value);
-        self.stack.set_pointer(value)?;
+        self.stack.set_pointer(value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
-        Ok(instruction.cycles + page_crossed as u8)
+        instruction.cycles + page_crossed as u8
     }
 
     fn lax(&mut self, instruction: &Instruction) -> u8 {
@@ -833,13 +833,13 @@ impl CPU {
         instruction.cycles + page_crossed as u8
     }
 
-    fn xas(&mut self, instruction: &Instruction) -> Result<u8, StackError> {
+    fn xas(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
         let result = self.register_x.get() & self.accumulator.get();
-        self.stack.set_pointer(result)?;
+        self.stack.set_pointer(result);
         self.bus
             .write(address, (result & address.to_be_bytes()[0]).wrapping_add(1));
-        Ok(instruction.cycles)
+        instruction.cycles
     }
 
     fn next_instruction(&mut self) -> Result<&'static Instruction, UnknownOpCode> {
@@ -848,17 +848,18 @@ impl CPU {
         OPCODES.get(&opcode).ok_or(UnknownOpCode(opcode))
     }
 
-    fn nmi_interrupt(&mut self) -> Result<(), StackError> {
-        self.stack.push(self.program_counter.get(), &mut self.bus)?;
-        self.stack.push(self.status.get(), &mut self.bus)?;
-        self.status.set_interrupt_disable_flag_to(false);
+    fn nmi_interrupt(&mut self) {
+        let mut status = self.status.clone();
+        status.set(ProcessorStatus::B_FLAG, false);
+        status.set(ProcessorStatus::B_FLAG_2, true);
+
+        self.stack.push(self.program_counter.get(), &mut self.bus);
+        self.stack.push(status.bits(), &mut self.bus);
+
+        self.status.set_interrupt_disable_flag_to(true);
+        self.bus.tick(2);
         self.program_counter
             .set(self.bus.read(NMI_INTERRUPT_VECTOR));
-        Ok(())
-    }
-
-    fn irq_interrupt(&mut self) -> Result<(), StackError> {
-        todo!("implement IRQ interrupt")
     }
 
     pub fn reset_interrupt(&mut self) {
@@ -878,7 +879,7 @@ impl CPU {
         result
     }
 
-    fn get_operand_address(
+    pub fn get_operand_address(
         &mut self,
         addressing_mode: &AddressingMode,
         address: u16,
@@ -990,8 +991,12 @@ impl CPU {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cpu::trace::trace;
     use crate::rom::rom::Rom;
-    use std::fs::read_to_string;
+    use std::fs;
+    use std::fs::{OpenOptions, read_to_string};
+    use std::io::Write;
+    use std::iter::zip;
 
     // Start execution at $C000 and compare execution with a known
     // good log - https://www.qmtpro.com/~nes/misc/nestest.log
@@ -1011,161 +1016,68 @@ mod tests {
         .unwrap();
     }
 
-    fn setup_cpu_with_program(program: Vec<u8>) -> CPU {
+    #[test]
+    fn compare_program_execution_logs() {
+        let log_file = "../log.txt";
+        let compare_log_file = "../compare_log.txt";
+
+        let mut log_lines = vec![];
+        let mut compare_log_lines = vec![];
+
+        zip(
+            read_to_string(log_file).unwrap().lines(),
+            read_to_string(compare_log_file).unwrap().lines(),
+        )
+        .for_each(|(log, compare_log)| {
+            log_lines.push(log);
+            compare_log_lines.push(compare_log);
+            if log == compare_log {
+                return;
+            }
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("../log_res.txt")
+                .unwrap()
+                .set_len(0)
+                .unwrap();
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("../compare_log_res.txt")
+                .unwrap()
+                .set_len(0)
+                .unwrap();
+
+            fs::write(
+                "../log_res.txt",
+                log_lines
+                    .clone()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<&str>>()
+                    .join("\n"),
+            )
+            .unwrap();
+            fs::write(
+                "../compare_log_res.txt",
+                compare_log_lines
+                    .clone()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<&str>>()
+                    .join("\n"),
+            )
+            .unwrap();
+
+            assert_eq!(log, compare_log);
+        })
+    }
+    fn setup_cpu_with_program<'bus>(program: Vec<u8>) -> CPU<'bus> {
         let rom = Rom::new(&program).unwrap();
-        let bus = CPUBus::new(rom);
+        let bus = CPUBus::new(rom, |_| {});
         let mut cpu = CPU::new(bus);
         cpu.reset_interrupt();
         cpu
-    }
-
-    fn trace(cpu: &mut CPU) -> String {
-        let program_counter = cpu.program_counter.get();
-        let raw_opcode = cpu.bus.read(program_counter);
-        let opcode = OPCODES
-            .get(&raw_opcode)
-            .ok_or(UnknownOpCode(raw_opcode))
-            .unwrap();
-
-        let mut hex_dump = vec![raw_opcode];
-
-        let (mem_addr, stored_value) = match opcode.mode {
-            AddressingMode::Immediate
-            | AddressingMode::Accumulator
-            | AddressingMode::Implied
-            | AddressingMode::Relative => (0, 0),
-            _ => {
-                let (_, addr) = cpu.get_operand_address(&opcode.mode, program_counter + 1);
-                let addr_value: u8 = cpu.bus.read(addr);
-                (addr, addr_value)
-            }
-        };
-
-        let tmp = match opcode.mode.operand_bytes() {
-            0 => match opcode.mode {
-                AddressingMode::Accumulator => "A ".to_string(),
-                _ => "".to_string(),
-            },
-            1 => {
-                let address: u8 = cpu.bus.read(program_counter + 1);
-                hex_dump.push(address);
-
-                match opcode.mode {
-                    AddressingMode::Immediate => format!("#${:02x}", address),
-                    AddressingMode::ZeroPage => format!("${:02x} = {:02x}", mem_addr, stored_value),
-                    AddressingMode::ZeroPageX => format!(
-                        "${:02x},X @ {:02x} = {:02x}",
-                        address, mem_addr, stored_value
-                    ),
-                    AddressingMode::ZeroPageY => format!(
-                        "${:02x},Y @ {:02x} = {:02x}",
-                        address, mem_addr, stored_value
-                    ),
-                    AddressingMode::IndexedIndirectX => format!(
-                        "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
-                        address,
-                        address.wrapping_add(cpu.register_x.get()),
-                        mem_addr,
-                        stored_value
-                    ),
-                    AddressingMode::IndirectIndexedY => format!(
-                        "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
-                        address,
-                        mem_addr.wrapping_sub(cpu.register_y.get() as u16),
-                        mem_addr,
-                        stored_value
-                    ),
-                    AddressingMode::Accumulator
-                    | AddressingMode::Implied
-                    | AddressingMode::Relative => {
-                        let address: usize =
-                            (program_counter as usize + 2).wrapping_add((address as i8) as usize);
-                        format!("${:04x}", address)
-                    }
-                    _ => panic!(
-                        "unexpected addressing mode {:?} has ops-len 2. code {}",
-                        opcode.mode, opcode.opcode
-                    ),
-                }
-            }
-            2 => {
-                let address_lo = cpu.bus.read(program_counter + 1);
-                let address_hi = cpu.bus.read(program_counter + 2);
-                hex_dump.push(address_lo);
-                hex_dump.push(address_hi);
-
-                let address = cpu.bus.read(program_counter + 1);
-
-                match (&opcode.opcode, &opcode.mode) {
-                    (_, AddressingMode::Indirect) => {
-                        let jmp_addr = if address & 0x00FF == 0x00FF {
-                            let lo: u8 = cpu.bus.read(address);
-                            let hi: u8 = cpu.bus.read(address & 0xFF00);
-                            (hi as u16) << 8 | (lo as u16)
-                        } else {
-                            cpu.bus.read(address)
-                        };
-                        format!("(${:04x}) = {mem_addr:04x}", address)
-                    }
-                    (
-                        _,
-                        AddressingMode::Accumulator
-                        | AddressingMode::Implied
-                        | AddressingMode::Relative,
-                    ) => {
-                        format!("${:04x}", address)
-                    }
-                    (OpCode::JMP | OpCode::JSR, AddressingMode::Absolute) => {
-                        format!("${:04x}", mem_addr)
-                    }
-                    (_, AddressingMode::Absolute) => {
-                        format!("${:04x} = {:02x}", mem_addr, stored_value)
-                    }
-                    (_, AddressingMode::AbsoluteX) => format!(
-                        "${:04x},X @ {:04x} = {:02x}",
-                        address, mem_addr, stored_value
-                    ),
-                    (_, AddressingMode::AbsoluteY) => format!(
-                        "${:04x},Y @ {:04x} = {:02x}",
-                        address, mem_addr, stored_value
-                    ),
-                    _ => panic!(
-                        "unexpected addressing mode {:?} has ops-len 3. code {}",
-                        opcode.mode, opcode.opcode
-                    ),
-                }
-            }
-            _ => String::from(""),
-        };
-
-        let hex_str = hex_dump
-            .iter()
-            .map(|z| format!("{:02x}", z))
-            .collect::<Vec<String>>()
-            .join(" ");
-        let asm_str = format!(
-            "{:04x}  {:8} {: >4} {}",
-            program_counter,
-            hex_str,
-            match raw_opcode {
-                0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => "*NOP".to_string(),
-                0xEB => "*SBC".to_string(),
-                _ => opcode.opcode.to_string(),
-            },
-            tmp
-        )
-        .trim()
-        .to_string();
-
-        format!(
-            "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}",
-            asm_str,
-            cpu.accumulator.get(),
-            cpu.register_x.get(),
-            cpu.register_y.get(),
-            cpu.status.get(),
-            cpu.stack.get_pointer(),
-        )
-        .to_ascii_uppercase()
     }
 }

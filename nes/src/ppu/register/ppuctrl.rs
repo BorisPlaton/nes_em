@@ -24,7 +24,7 @@ bitflags! {
         const NAMETABLE_ADDR_2 = 0b0000_0010;
         const ADDR_INCREMENT = 0b0000_0100;
         const SPRITE_ADDR = 0b0000_1000;
-        const BACKGROUND_ADDR = 0b0001_0000;
+        const BACKGROUND_PATTERN_ADDR = 0b0001_0000;
         const SPRITE_SIZE = 0b0010_0000;
         const MASTER_SLAVE_SELECT =  0b0100_0000;
         const NMI_ENABLE = 0b1000_0000;
@@ -37,14 +37,30 @@ impl PPUCTRL {
     }
 
     pub fn address_increment(&self) -> u8 {
-        if self.contains(PPUCTRL::ADDR_INCREMENT) {
-            32
-        } else {
+        if !self.contains(PPUCTRL::ADDR_INCREMENT) {
             1
+        } else {
+            32
         }
     }
 
     pub fn write(&mut self, value: u8) {
         *self = PPUCTRL::from_bits_truncate(value);
+    }
+
+    pub fn background_pattern_address(&self) -> u16 {
+        if !self.contains(PPUCTRL::BACKGROUND_PATTERN_ADDR) {
+            0
+        } else {
+            0x1000
+        }
+    }
+
+    pub fn sprite_pattern_address(&self) -> u16 {
+        if !self.contains(PPUCTRL::SPRITE_ADDR) {
+            0
+        } else {
+            0x1000
+        }
     }
 }
