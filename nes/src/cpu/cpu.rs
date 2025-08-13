@@ -1,4 +1,4 @@
-use crate::cpu::bus::{CPUBus, CPUBusOperation};
+use crate::bus::{Bus, BusOperation};
 use crate::cpu::error::UnknownOpCode;
 use crate::cpu::opcode::OPCODES;
 use crate::cpu::opcode::{AddressingMode, Instruction, OpCode};
@@ -9,22 +9,22 @@ use crate::cpu::register::status::ProcessorStatus;
 
 type PageCrossed = bool;
 
-const NMI_INTERRUPT_VECTOR: u16 = 0xFFFA;
-const RESET_INTERRUPT_VECTOR: u16 = 0xFFFC;
-const IRQ_INTERRUPT_VECTOR: u16 = 0xFFFE;
-
 pub struct CPU<'bus> {
     pub accumulator: Register<u8>,
     pub register_x: Register<u8>,
     pub register_y: Register<u8>,
     pub program_counter: ProgramCounter,
     pub status: ProcessorStatus,
-    pub bus: CPUBus<'bus>,
+    pub bus: Bus<'bus>,
     pub stack: Stack,
 }
 
 impl<'bus> CPU<'bus> {
-    pub fn new(bus: CPUBus<'bus>) -> Self {
+    const NMI_INTERRUPT_VECTOR: u16 = 0xFFFA;
+    const RESET_INTERRUPT_VECTOR: u16 = 0xFFFC;
+    const IRQ_INTERRUPT_VECTOR: u16 = 0xFFFE;
+
+    pub fn new(bus: Bus<'bus>) -> Self {
         CPU {
             accumulator: Register::new(0),
             register_x: Register::new(0),
@@ -129,6 +129,119 @@ impl<'bus> CPU<'bus> {
             };
             self.bus.tick(passed_cycles);
         }
+    }
+
+    pub fn get_operand_address(
+        &mut self,
+        addressing_mode: &AddressingMode,
+        address: u16,
+    ) -> (PageCrossed, u16) {
+        match addressing_mode {
+            AddressingMode::Absolute => (false, self.bus.read(address)),
+            AddressingMode::AbsoluteX => {
+                let absolute_address: u16 = self.bus.read(address);
+                let absolute_address_x =
+                    absolute_address.wrapping_add(self.register_x.get() as u16);
+                (
+                    (absolute_address >> 8) != (absolute_address_x >> 8),
+                    absolute_address_x,
+                )
+            }
+            AddressingMode::AbsoluteY => {
+                let absolute_address: u16 = self.bus.read(address);
+                let absolute_address_y =
+                    absolute_address.wrapping_add(self.register_y.get() as u16);
+                (
+                    (absolute_address >> 8) != (absolute_address_y >> 8),
+                    absolute_address_y,
+                )
+            }
+            AddressingMode::Immediate | AddressingMode::Relative => (false, address),
+            AddressingMode::IndexedIndirectX => {
+                let indirect_address: u8 = BusOperation::<u8>::read(&mut self.bus, address)
+                    .wrapping_add(self.register_x.get());
+                // TODO: Maybe it is better to move this logic into the bus
+                if (indirect_address & 0xFF) == 0 {
+                    (false, self.bus.read(indirect_address as u16))
+                } else {
+                    (
+                        false,
+                        u16::from_le_bytes([
+                            self.bus.read(indirect_address as u16),
+                            self.bus.read(indirect_address.wrapping_add(1) as u16),
+                        ]),
+                    )
+                }
+            }
+            AddressingMode::Indirect => {
+                let indirect_address = self.bus.read(address);
+                let indirect_address_suffix = indirect_address as u8;
+
+                // TODO: Maybe it is better to move this logic into the bus
+                // Indirect addressing mode is used only in JMP instruction. But an original 6502
+                // has does not correctly fetch the target address if the indirect vector falls on
+                // a page boundary. This code fixes it.
+                // Details: https://www.nesdev.org/obelisk-6502-guide/reference.html#JMP
+                if (indirect_address_suffix & 0xFF) == 0 {
+                    (false, self.bus.read(indirect_address))
+                } else {
+                    (
+                        false,
+                        u16::from_le_bytes([
+                            self.bus.read(indirect_address),
+                            self.bus.read(u16::from_be_bytes([
+                                (indirect_address >> 8) as u8,
+                                indirect_address_suffix.wrapping_add(1),
+                            ])),
+                        ]),
+                    )
+                }
+            }
+            AddressingMode::IndirectIndexedY => {
+                let indirect_address: u8 = self.bus.read(address);
+                // TODO: Maybe it is better to move this logic into the bus
+                let real_address = if (indirect_address & 0xFF) == 0 {
+                    self.bus.read(indirect_address as u16)
+                } else {
+                    u16::from_le_bytes([
+                        self.bus.read(indirect_address as u16),
+                        self.bus.read(indirect_address.wrapping_add(1) as u16),
+                    ])
+                };
+                (
+                    false,
+                    real_address.wrapping_add(self.register_y.get() as u16),
+                )
+            }
+            AddressingMode::ZeroPage => (
+                false,
+                BusOperation::<u8>::read(&mut self.bus, address) as u16,
+            ),
+            AddressingMode::ZeroPageX => (
+                false,
+                BusOperation::<u8>::read(&mut self.bus, address).wrapping_add(self.register_x.get())
+                    as u16,
+            ),
+            AddressingMode::ZeroPageY => (
+                false,
+                BusOperation::<u8>::read(&mut self.bus, address).wrapping_add(self.register_y.get())
+                    as u16,
+            ),
+            // TODO: Add error instead of panic
+            AddressingMode::Accumulator | AddressingMode::Implied => {
+                panic!("Mode {addressing_mode:?} can't have address")
+            }
+        }
+    }
+
+    pub fn reset_interrupt(&mut self) {
+        self.program_counter
+            .set(self.bus.read(Self::RESET_INTERRUPT_VECTOR));
+        self.accumulator.set(0);
+        self.register_x.set(0);
+        self.register_y.set(0);
+        self.status.reset();
+        self.stack.reset();
     }
 
     fn adc(&mut self, instruction: &Instruction) -> u8 {
@@ -256,7 +369,7 @@ impl<'bus> CPU<'bus> {
         self.stack.push(self.program_counter.get(), &mut self.bus);
         self.stack.push(self.status.get(), &mut self.bus);
         self.program_counter
-            .set(self.bus.read(IRQ_INTERRUPT_VECTOR));
+            .set(self.bus.read(Self::IRQ_INTERRUPT_VECTOR));
         self.status.set_interrupt_disable_flag_to(true);
         instruction.cycles
     }
@@ -333,7 +446,7 @@ impl<'bus> CPU<'bus> {
 
     fn dec(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
+        let value = BusOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -365,7 +478,7 @@ impl<'bus> CPU<'bus> {
 
     fn inc(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
+        let value = BusOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.status.set_zero_flag(value);
         self.status.set_negative_flag(value);
@@ -711,7 +824,7 @@ impl<'bus> CPU<'bus> {
 
     fn dcp(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
+        let value = BusOperation::<u8>::read(&mut self.bus, address).wrapping_sub(1);
         self.bus.write(address, value);
 
         let result = self.accumulator.sub(value);
@@ -731,7 +844,7 @@ impl<'bus> CPU<'bus> {
 
     fn isb(&mut self, instruction: &Instruction) -> u8 {
         let (_, address) = self.read_operand_address(&instruction.mode);
-        let value = CPUBusOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
+        let value = BusOperation::<u8>::read(&mut self.bus, address).wrapping_add(1);
         self.bus.write(address, value);
         self.adc_operation(!value);
         instruction.cycles
@@ -859,17 +972,7 @@ impl<'bus> CPU<'bus> {
         self.status.set_interrupt_disable_flag_to(true);
         self.bus.tick(2);
         self.program_counter
-            .set(self.bus.read(NMI_INTERRUPT_VECTOR));
-    }
-
-    pub fn reset_interrupt(&mut self) {
-        self.program_counter
-            .set(self.bus.read(RESET_INTERRUPT_VECTOR));
-        self.accumulator.set(0);
-        self.register_x.set(0);
-        self.register_y.set(0);
-        self.status.reset();
-        self.stack.reset();
+            .set(self.bus.read(Self::NMI_INTERRUPT_VECTOR));
     }
 
     fn read_operand_address(&mut self, addressing_mode: &AddressingMode) -> (PageCrossed, u16) {
@@ -877,109 +980,6 @@ impl<'bus> CPU<'bus> {
         self.program_counter
             .add(addressing_mode.operand_bytes() as u16);
         result
-    }
-
-    pub fn get_operand_address(
-        &mut self,
-        addressing_mode: &AddressingMode,
-        address: u16,
-    ) -> (PageCrossed, u16) {
-        match addressing_mode {
-            AddressingMode::Absolute => (false, self.bus.read(address)),
-            AddressingMode::AbsoluteX => {
-                let absolute_address: u16 = self.bus.read(address);
-                let absolute_address_x =
-                    absolute_address.wrapping_add(self.register_x.get() as u16);
-                (
-                    (absolute_address >> 8) != (absolute_address_x >> 8),
-                    absolute_address_x,
-                )
-            }
-            AddressingMode::AbsoluteY => {
-                let absolute_address: u16 = self.bus.read(address);
-                let absolute_address_y =
-                    absolute_address.wrapping_add(self.register_y.get() as u16);
-                (
-                    (absolute_address >> 8) != (absolute_address_y >> 8),
-                    absolute_address_y,
-                )
-            }
-            AddressingMode::Immediate | AddressingMode::Relative => (false, address),
-            AddressingMode::IndexedIndirectX => {
-                let indirect_address: u8 = CPUBusOperation::<u8>::read(&mut self.bus, address)
-                    .wrapping_add(self.register_x.get());
-                // TODO: Maybe it is better to move this logic into the bus
-                if (indirect_address & 0xFF) == 0 {
-                    (false, self.bus.read(indirect_address as u16))
-                } else {
-                    (
-                        false,
-                        u16::from_le_bytes([
-                            self.bus.read(indirect_address as u16),
-                            self.bus.read(indirect_address.wrapping_add(1) as u16),
-                        ]),
-                    )
-                }
-            }
-            AddressingMode::Indirect => {
-                let indirect_address = self.bus.read(address);
-                let indirect_address_suffix = indirect_address as u8;
-
-                // TODO: Maybe it is better to move this logic into the bus
-                // Indirect addressing mode is used only in JMP instruction. But an original 6502
-                // has does not correctly fetch the target address if the indirect vector falls on
-                // a page boundary. This code fixes it.
-                // Details: https://www.nesdev.org/obelisk-6502-guide/reference.html#JMP
-                if (indirect_address_suffix & 0xFF) == 0 {
-                    (false, self.bus.read(indirect_address))
-                } else {
-                    (
-                        false,
-                        u16::from_le_bytes([
-                            self.bus.read(indirect_address),
-                            self.bus.read(u16::from_be_bytes([
-                                (indirect_address >> 8) as u8,
-                                indirect_address_suffix.wrapping_add(1),
-                            ])),
-                        ]),
-                    )
-                }
-            }
-            AddressingMode::IndirectIndexedY => {
-                let indirect_address: u8 = self.bus.read(address);
-                // TODO: Maybe it is better to move this logic into the bus
-                let real_address = if (indirect_address & 0xFF) == 0 {
-                    self.bus.read(indirect_address as u16)
-                } else {
-                    u16::from_le_bytes([
-                        self.bus.read(indirect_address as u16),
-                        self.bus.read(indirect_address.wrapping_add(1) as u16),
-                    ])
-                };
-                (
-                    false,
-                    real_address.wrapping_add(self.register_y.get() as u16),
-                )
-            }
-            AddressingMode::ZeroPage => (
-                false,
-                CPUBusOperation::<u8>::read(&mut self.bus, address) as u16,
-            ),
-            AddressingMode::ZeroPageX => (
-                false,
-                CPUBusOperation::<u8>::read(&mut self.bus, address)
-                    .wrapping_add(self.register_x.get()) as u16,
-            ),
-            AddressingMode::ZeroPageY => (
-                false,
-                CPUBusOperation::<u8>::read(&mut self.bus, address)
-                    .wrapping_add(self.register_y.get()) as u16,
-            ),
-            // TODO: Add error instead of panic
-            AddressingMode::Accumulator | AddressingMode::Implied => {
-                panic!("Mode {addressing_mode:?} can't have address")
-            }
-        }
     }
 
     fn get_value(&mut self, addressing_mode: &AddressingMode) -> (PageCrossed, u8) {
@@ -1075,7 +1075,7 @@ mod tests {
     }
     fn setup_cpu_with_program<'bus>(program: Vec<u8>) -> CPU<'bus> {
         let rom = Rom::new(&program).unwrap();
-        let bus = CPUBus::new(rom, |_| {});
+        let bus = Bus::new(rom, |_| {});
         let mut cpu = CPU::new(bus);
         cpu.reset_interrupt();
         cpu

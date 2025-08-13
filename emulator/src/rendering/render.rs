@@ -4,7 +4,7 @@ use nes::ppu::palette::{get_bg_palette, sprite_palette};
 use nes::ppu::ppu::PPU;
 
 pub fn render(ppu: &PPU, frame: &mut Frame) {
-    for i in 0..0x03c0usize {
+    for i in 0..0x03C0usize {
         let tile_x = i % 32;
         let tile_y = i / 32;
         let tile = ppu.read_tile(i);

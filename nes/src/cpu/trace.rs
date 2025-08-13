@@ -1,4 +1,4 @@
-use crate::cpu::bus::CPUBusOperation;
+use crate::bus::BusOperation;
 use crate::cpu::cpu::CPU;
 use crate::cpu::error::UnknownOpCode;
 use crate::cpu::opcode::{AddressingMode, OPCODES, OpCode};
