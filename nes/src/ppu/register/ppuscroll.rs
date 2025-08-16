@@ -39,4 +39,12 @@ impl PPUSCROLL {
     pub fn reset_latch(&mut self) {
         self.latch = false;
     }
+
+    pub fn x_scroll(&self) -> u8 {
+        self.data.0
+    }
+
+    pub fn y_scroll(&self) -> u8 {
+        self.data.1
+    }
 }

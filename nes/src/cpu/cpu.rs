@@ -995,7 +995,6 @@ mod tests {
     use crate::rom::rom::Rom;
     use std::fs;
     use std::fs::{OpenOptions, read_to_string};
-    use std::io::Write;
     use std::iter::zip;
 
     // Start execution at $C000 and compare execution with a known
@@ -1075,7 +1074,7 @@ mod tests {
     }
     fn setup_cpu_with_program<'bus>(program: Vec<u8>) -> CPU<'bus> {
         let rom = Rom::new(&program).unwrap();
-        let bus = Bus::new(rom, |_| {});
+        let bus = Bus::new(rom, |_, _| {});
         let mut cpu = CPU::new(bus);
         cpu.reset_interrupt();
         cpu

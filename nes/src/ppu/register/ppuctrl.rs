@@ -63,4 +63,16 @@ impl PPUCTRL {
             0x1000
         }
     }
+
+    pub fn nametable_address(&self) -> u16 {
+        match (
+            self.contains(PPUCTRL::NAMETABLE_ADDR_2),
+            self.contains(PPUCTRL::NAMETABLE_ADDR_1),
+        ) {
+            (false, false) => 0x2000,
+            (false, true) => 0x2400,
+            (true, false) => 0x2800,
+            (true, true) => 0x2C00,
+        }
+    }
 }

@@ -8,6 +8,7 @@ use crate::ppu::register::ppudata::PPUDATA;
 use crate::ppu::register::ppumask::PPUMASK;
 use crate::ppu::register::ppuscroll::PPUSCROLL;
 use crate::ppu::register::ppustatus::PPUSTATUS;
+use std::ops::Range;
 
 pub struct PPU {
     // PPU Registers
@@ -75,21 +76,25 @@ impl PPU {
             return false;
         }
 
+        if self.is_sprite_0_hit(self.cycles) {
+            self.ppustatus.set(PPUSTATUS::SPRITE_ZERO_HIT_FLAG, false);
+        }
+
         self.cycles -= 341;
         self.scanline += 1;
 
         // https://www.nesdev.org/wiki/PPU_rendering#Vertical_blanking_lines_(241-260)
         if self.scanline == 241 {
-            self.ppustatus.set_vblank_flag_to(true);
-            self.ppustatus.set_sprite_zero_hit_to(false);
+            self.ppustatus.set(PPUSTATUS::VBLANK_FLAG, true);
+            self.ppustatus.set(PPUSTATUS::SPRITE_ZERO_HIT_FLAG, false);
             self.nmi_interrupt = self.ppuctrl.contains(PPUCTRL::NMI_ENABLE);
         }
 
         if self.scanline >= 262 {
             self.scanline = 0;
-            self.ppustatus.set_vblank_flag_to(false);
-            self.ppustatus.set_sprite_zero_hit_to(false);
             self.nmi_interrupt = false;
+            self.ppustatus.set(PPUSTATUS::VBLANK_FLAG, false);
+            self.ppustatus.set(PPUSTATUS::SPRITE_ZERO_HIT_FLAG, false);
             return true;
         }
 
@@ -158,12 +163,6 @@ impl PPU {
         }
     }
 
-    pub fn read_tile(&self, tile: usize) -> &[u8] {
-        let bank_addr = self.ppuctrl.background_pattern_address() as usize;
-        let tile_values = self.vram[tile] as usize;
-        &self.chr_rom[(bank_addr + tile_values * 16)..=(bank_addr + tile_values * 16 + 15)]
-    }
-
     pub fn read_sprite_tile(&self, tile: usize) -> &[u8] {
         let bank = self.ppuctrl.sprite_pattern_address() as usize;
         &self.chr_rom[(bank + tile * 16)..=(bank + tile * 16 + 15)]
@@ -183,7 +182,7 @@ impl PPU {
 
     pub fn read_ppustatus(&mut self) -> u8 {
         let status = self.ppustatus.read();
-        self.ppustatus.set_vblank_flag_to(false);
+        self.ppustatus.set(PPUSTATUS::VBLANK_FLAG, false);
         self.ppuaddr.reset_latch();
         self.ppuscroll.reset_latch();
         status
@@ -212,6 +211,36 @@ impl PPU {
         }
     }
 
+    pub fn get_x_scroll(&self) -> u8 {
+        self.ppuscroll.x_scroll()
+    }
+
+    pub fn get_y_scroll(&self) -> u8 {
+        self.ppuscroll.y_scroll()
+    }
+
+    pub fn read_tile(&self, tile: usize, name_table_range: &Range<usize>) -> &[u8] {
+        let bank_addr = self.ppuctrl.background_pattern_address() as usize;
+        let tile_index = self.vram[name_table_range.clone()][tile] as usize;
+        &self.chr_rom[(bank_addr + tile_index * 16)..=(bank_addr + tile_index * 16 + 15)]
+    }
+
+    pub fn get_name_table_ranges(&self) -> (Range<usize>, Range<usize>) {
+        match (&self.mirroring, self.ppuctrl.nametable_address()) {
+            (Mirroring::Vertical, 0x2000)
+            | (Mirroring::Vertical, 0x2800)
+            | (Mirroring::Horizontal, 0x2000)
+            | (Mirroring::Horizontal, 0x2400) => (0..0x400, 0x400..0x800),
+            (Mirroring::Vertical, 0x2400)
+            | (Mirroring::Vertical, 0x2C00)
+            | (Mirroring::Horizontal, 0x2800)
+            | (Mirroring::Horizontal, 0x2C00) => (0x400..0x800, 0..0x400),
+            (_, _) => {
+                panic!("Not supported mirroring type {:?}", self.mirroring);
+            }
+        }
+    }
+
     fn increment_ppuaddr(&mut self) {
         self.ppuaddr.inc(self.ppuctrl.address_increment());
     }
@@ -234,5 +263,13 @@ impl PPU {
             (Mirroring::Horizontal, 1 | 2) => vram_index - PPU::VRAM_NAMETABLE_SIZE,
             _ => vram_index,
         }
+    }
+
+    fn is_sprite_0_hit(&self, cycle: usize) -> bool {
+        let y = self.oam_data[0] as usize;
+        let x = self.oam_data[3] as usize;
+        (y == self.scanline as usize)
+            && x <= cycle
+            && self.ppumask.contains(PPUMASK::ENABLE_SPRITE_RENDERING)
     }
 }

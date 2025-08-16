@@ -27,12 +27,4 @@ impl PPUSTATUS {
     pub fn read(&self) -> u8 {
         self.bits()
     }
-
-    pub fn set_vblank_flag_to(&mut self, activate: bool) {
-        self.set(PPUSTATUS::VBLANK_FLAG, activate);
-    }
-
-    pub fn set_sprite_zero_hit_to(&mut self, activate: bool) {
-        self.set(PPUSTATUS::SPRITE_ZERO_HIT_FLAG, activate);
-    }
 }
